@@ -24,7 +24,9 @@ class InvitationService:
         self._users = UserRepository(db)
         self._email = EmailService()
 
-    async def create_invitation(self, *, email: str, role: Role, created_by: User) -> Invitation:
+    async def create_invitation(
+        self, *, email: str, role: Role, created_by: User
+    ) -> tuple[Invitation, str]:
         if await self._users.get_by_email(email) is not None:
             raise InvitationError("invitation.email_already_registered")
 
@@ -42,7 +44,7 @@ class InvitationService:
 
         accept_url = f"{settings.frontend_base_url}/accept-invitation?token={raw_token}"
         self._email.send_invitation_email(to=email, accept_url=accept_url)
-        return invitation
+        return invitation, accept_url
 
     async def preview(self, raw_token: str) -> Invitation:
         return await self._get_valid_invitation(raw_token)

@@ -19,6 +19,11 @@ class InvitationRead(BaseModel):
     role: Role
     expires_at: datetime
     accepted_at: datetime | None
+    # Development only - set by the router, never populated in production (the
+    # token is hashed at rest specifically so it can't be recovered from the
+    # DB; it must not leak back out through the API either). See
+    # tests/api/test_invitations.py::test_accept_url_is_absent_in_production.
+    accept_url: str | None = None
 
 
 class InvitationPreview(BaseModel):

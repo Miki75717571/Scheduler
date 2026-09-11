@@ -1,3 +1,4 @@
+import logging
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -12,6 +13,13 @@ from sqlalchemy import text
 from app.api.v1 import auth, health, invitations, users
 from app.core.config import describe_database, settings
 from app.db.session import engine
+
+# Without this, logger.info(...) calls anywhere in the app (e.g. the console
+# email provider printing invite links - app/services/email_service.py) are
+# silently dropped: Python's root logger defaults to WARNING with no handler,
+# and neither FastAPI nor Uvicorn configures one for anything outside its own
+# "uvicorn.*" loggers.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 
 @asynccontextmanager

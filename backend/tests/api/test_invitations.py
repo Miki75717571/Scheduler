@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.models.user import Role, User
 from app.services import email_service
@@ -137,6 +138,45 @@ async def test_invalid_invitation_token_is_rejected(client: AsyncClient) -> None
 
     assert response.status_code == 400
     assert response.json()["detail"]["message_key"] == "invitation.not_found"
+
+
+async def test_accept_url_is_present_in_development_response(
+    client: AsyncClient, db_session: AsyncSession, captured_email: dict[str, str]
+) -> None:
+    assert settings.app_env == "development"  # sanity: this is what the test suite runs as
+    await _create_user(db_session, email="olive@example.com", role=Role.ADMIN)
+    token = await _login(client, "olive@example.com")
+
+    response = await client.post(
+        "/api/v1/invitations",
+        json={"email": "devcheck@example.com", "role": "EMPLOYEE"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["accept_url"] == captured_email["accept_url"]
+
+
+async def test_accept_url_is_absent_in_production(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    captured_email: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _create_user(db_session, email="pete@example.com", role=Role.ADMIN)
+    token = await _login(client, "pete@example.com")
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    response = await client.post(
+        "/api/v1/invitations",
+        json={"email": "prodcheck@example.com", "role": "EMPLOYEE"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["accept_url"] is None
+    # The invite still works end-to-end - only the response field is gated.
+    assert captured_email["accept_url"] is not None
 
 
 async def test_cannot_invite_an_already_registered_email(

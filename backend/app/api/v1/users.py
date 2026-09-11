@@ -22,12 +22,13 @@ def get_me(current_user: CurrentUser) -> UserRead:
 async def update_me(
     payload: UserUpdate, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
 ) -> UserRead:
-    if payload.full_name is not None:
-        current_user.full_name = payload.full_name
-    if payload.phone is not None:
-        current_user.phone = payload.phone
-    if payload.locale is not None:
-        current_user.locale = payload.locale
+    # exclude_unset (not "is not None"): phone must be clearable by sending it
+    # blank (normalizes to None - see schemas/user.py), which "is not None"
+    # would silently ignore. Password is handled separately below since blank
+    # there means the opposite - "leave my password alone", never "clear it".
+    for field, value in payload.model_dump(exclude_unset=True, exclude={"password"}).items():
+        setattr(current_user, field, value)
+
     if payload.password is not None:
         current_user.password_hash = hash_password(payload.password)
 

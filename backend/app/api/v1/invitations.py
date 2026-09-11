@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import CurrentUser, require_role
 from app.db.session import get_db
 from app.models.user import Role
@@ -26,14 +27,21 @@ async def create_invitation(
     payload: InvitationCreate, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
 ) -> InvitationRead:
     try:
-        invitation = await InvitationService(db).create_invitation(
+        invitation, accept_url = await InvitationService(db).create_invitation(
             email=payload.email, role=payload.role, created_by=current_user
         )
     except InvitationError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail={"message_key": exc.message_key}
         ) from exc
-    return InvitationRead.model_validate(invitation)
+
+    result = InvitationRead.model_validate(invitation)
+    if settings.app_env == "development":
+        # Dev convenience so you can copy the link straight from /docs instead
+        # of digging through logs. Never in production: the token is hashed at
+        # rest specifically so it can't be recovered from the DB or the API.
+        result.accept_url = accept_url
+    return result
 
 
 @router.get("/{token}", response_model=InvitationPreview)

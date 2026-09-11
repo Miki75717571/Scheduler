@@ -125,6 +125,88 @@ async def test_admin_can_deactivate_a_user(client: AsyncClient, db_session: Asyn
     assert response.json()["is_active"] is False
 
 
+async def test_update_me_with_blank_phone_clears_it(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _create_user(db_session, email="oscar@example.com")
+    token = await _login(client, "oscar@example.com")
+    await client.patch(
+        "/api/v1/users/me", json={"phone": "123456789"}, headers=_auth_headers(token)
+    )
+
+    response = await client.patch(
+        "/api/v1/users/me", json={"phone": ""}, headers=_auth_headers(token)
+    )
+
+    assert response.status_code == 200
+    assert response.json()["phone"] is None
+
+
+async def test_update_me_with_blank_password_leaves_it_unchanged(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _create_user(db_session, email="paula@example.com", password="originalpassword")
+    token = await _login(client, "paula@example.com", "originalpassword")
+
+    response = await client.patch(
+        "/api/v1/users/me", json={"password": ""}, headers=_auth_headers(token)
+    )
+    assert response.status_code == 200
+
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "paula@example.com", "password": "originalpassword"},
+    )
+    assert login_response.status_code == 200
+
+
+async def test_update_me_with_blank_phone_and_password_together(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _create_user(db_session, email="quinn@example.com", password="originalpassword2")
+    token = await _login(client, "quinn@example.com", "originalpassword2")
+
+    response = await client.patch(
+        "/api/v1/users/me",
+        json={"full_name": "Quinn Updated", "phone": "", "password": ""},
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["full_name"] == "Quinn Updated"
+    assert body["phone"] is None
+
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "quinn@example.com", "password": "originalpassword2"},
+    )
+    assert login_response.status_code == 200
+
+
+async def test_update_me_with_a_real_password_actually_changes_it(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _create_user(db_session, email="ruth@example.com", password="oldpassword123")
+    token = await _login(client, "ruth@example.com", "oldpassword123")
+
+    response = await client.patch(
+        "/api/v1/users/me", json={"password": "brandnewpassword123"}, headers=_auth_headers(token)
+    )
+    assert response.status_code == 200
+
+    old_login = await client.post(
+        "/api/v1/auth/login", json={"email": "ruth@example.com", "password": "oldpassword123"}
+    )
+    assert old_login.status_code == 401
+
+    new_login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "ruth@example.com", "password": "brandnewpassword123"},
+    )
+    assert new_login.status_code == 200
+
+
 async def test_deactivated_user_cannot_log_in(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
