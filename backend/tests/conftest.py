@@ -9,7 +9,15 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import configure_sqlite, get_db
 from app.main import app
-from app.models import invitation, user  # noqa: F401  registers tables on Base.metadata
+from app.models import (  # noqa: F401  registers tables on Base.metadata
+    availability,
+    invitation,
+    rule,
+    schedule_period,
+    shift_slot,
+    shift_type,
+    user,
+)
 
 # NullPool: every connection is opened fresh and never reused across tests, so
 # there's no pooled-connection/event-loop mismatch to worry about (see the

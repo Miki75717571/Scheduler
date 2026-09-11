@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api.v1 import auth, health, invitations, users
+from app.api.v1 import auth, availability, health, invitations, periods, rules, shift_types, users
 from app.core.config import describe_database, settings
 from app.db.session import engine
 
@@ -66,3 +66,7 @@ app.include_router(health.router, prefix=API_V1_PREFIX)
 app.include_router(auth.router, prefix=API_V1_PREFIX)
 app.include_router(users.router, prefix=API_V1_PREFIX)
 app.include_router(invitations.router, prefix=API_V1_PREFIX)
+app.include_router(shift_types.router, prefix=API_V1_PREFIX)
+app.include_router(periods.router, prefix=API_V1_PREFIX)
+app.include_router(availability.router, prefix=API_V1_PREFIX)
+app.include_router(rules.router, prefix=API_V1_PREFIX)

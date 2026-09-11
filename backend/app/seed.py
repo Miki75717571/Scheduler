@@ -1,46 +1,327 @@
-"""Bootstrap the first ADMIN user from environment variables, if none exists yet.
+"""Demo data bootstrap.
 
-Grows in later phases (availability, scores, rules) into the full demo dataset
-described in ARCHITECTURE.md; for Phase 1 it only needs to get one admin
-logged in so they can start inviting people.
+Phase 1: the first ADMIN user, from environment variables, if none exists yet.
+Phase 2 adds: the three demo ShiftTypes (MORNING/EVENING every day, MIDDAY
+weekends only), the two demo availability rules from CLAUDE.md ("minimum 7
+declared shifts", "at least 1 Friday evening"), ~18 employees with varied
+employment types, and a demo SchedulePeriod for next month with a full
+month of plausible availability already filled in (most employees
+submitted, a few left in DRAFT or NOT_STARTED so the manager's submission
+tracker has something to show).
+
+Idempotent: re-running `uv run python -m app.seed` skips anything that
+already exists (matched by code/email/year+month) rather than duplicating it
+or crashing.
 """
 
 import asyncio
+import random
+import uuid
+from datetime import date, time
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
-from app.models.user import Role, User
+from app.models.availability import AvailabilityStatus
+from app.models.rule import RulePhase, RuleScope, RuleSeverity, RuleType
+from app.models.schedule_period import PeriodState
+from app.models.shift_slot import ShiftSlot
+from app.models.shift_type import ShiftType
+from app.models.user import EmploymentType, Role, User
+from app.repositories.period_repository import PeriodRepository
+from app.repositories.rule_repository import RuleRepository
+from app.repositories.shift_type_repository import ShiftTypeRepository
+from app.repositories.user_repository import UserRepository
+from app.rules.weekdays import ALL_WEEKDAYS_MASK, WEEKEND_MASK, Weekday, weekday_of
+from app.schemas.availability import AvailabilityEntryWrite
+from app.schemas.period import PeriodCreate
+from app.schemas.rule import RuleCreate
+from app.schemas.shift_type import ShiftTypeCreate
+from app.services.availability_service import AvailabilityService
+from app.services.period_service import PeriodService
+from app.services.rule_service import RuleService
+from app.services.shift_type_service import ShiftTypeService
+
+_SHIFT_TYPE_DEFS = [
+    ShiftTypeCreate(
+        code="MORNING",
+        name_pl="Rano",
+        name_en="Morning",
+        start_time=time(7, 0),
+        end_time=time(15, 0),
+        color_hex="#fbbf24",
+        active_weekdays=ALL_WEEKDAYS_MASK,
+        default_required_staff=3,
+        default_min_staff=2,
+        default_max_staff=4,
+        sort_order=0,
+    ),
+    ShiftTypeCreate(
+        code="MIDDAY",
+        name_pl="Poludnie",
+        name_en="Midday",
+        start_time=time(11, 0),
+        end_time=time(19, 0),
+        color_hex="#22c55e",
+        active_weekdays=WEEKEND_MASK,
+        default_required_staff=2,
+        default_min_staff=1,
+        default_max_staff=3,
+        sort_order=1,
+    ),
+    ShiftTypeCreate(
+        code="EVENING",
+        name_pl="Wieczor",
+        name_en="Evening",
+        start_time=time(15, 0),
+        end_time=time(23, 0),
+        color_hex="#6366f1",
+        active_weekdays=ALL_WEEKDAYS_MASK,
+        default_required_staff=3,
+        default_min_staff=2,
+        default_max_staff=4,
+        sort_order=2,
+    ),
+]
+
+_RULE_DEFS = [
+    RuleCreate(
+        code="min_7_shifts",
+        name_pl="Minimum 7 zadeklarowanych zmian",
+        name_en="Minimum 7 declared shifts",
+        type=RuleType.MIN_AVAILABILITY_COUNT,
+        scope=RuleScope.GLOBAL,
+        params={"n": 7},
+        severity=RuleSeverity.HARD,
+        phase=RulePhase.AVAILABILITY,
+    ),
+    RuleCreate(
+        code="min_1_friday_evening",
+        name_pl="Co najmniej 1 piatkowy wieczor",
+        name_en="At least 1 Friday evening",
+        type=RuleType.MIN_AVAILABILITY_IN_SET,
+        scope=RuleScope.GLOBAL,
+        params={"n": 1, "weekday": "FRI", "shift": "EVENING"},
+        severity=RuleSeverity.HARD,
+        phase=RulePhase.AVAILABILITY,
+    ),
+]
+
+_EMPLOYEE_DEFS: list[tuple[str, str, EmploymentType]] = [
+    ("employee01@example.com", "Anna Kowalska", EmploymentType.FULL_TIME),
+    ("employee02@example.com", "Piotr Nowak", EmploymentType.PART_TIME),
+    ("employee03@example.com", "Katarzyna Wisniewska", EmploymentType.STUDENT),
+    ("employee04@example.com", "Tomasz Wojcik", EmploymentType.CASUAL),
+    ("employee05@example.com", "Magdalena Kowalczyk", EmploymentType.FULL_TIME),
+    ("employee06@example.com", "Michal Kaminski", EmploymentType.PART_TIME),
+    ("employee07@example.com", "Agnieszka Lewandowska", EmploymentType.STUDENT),
+    ("employee08@example.com", "Pawel Zielinski", EmploymentType.CASUAL),
+    ("employee09@example.com", "Joanna Szymanska", EmploymentType.FULL_TIME),
+    ("employee10@example.com", "Krzysztof Wozniak", EmploymentType.PART_TIME),
+    ("employee11@example.com", "Ewa Dabrowska", EmploymentType.STUDENT),
+    ("employee12@example.com", "Marcin Kozlowski", EmploymentType.CASUAL),
+    ("employee13@example.com", "Natalia Jankowska", EmploymentType.FULL_TIME),
+    ("employee14@example.com", "Lukasz Mazur", EmploymentType.PART_TIME),
+    ("employee15@example.com", "Aleksandra Kwiatkowska", EmploymentType.STUDENT),
+    ("employee16@example.com", "Grzegorz Wojciechowski", EmploymentType.CASUAL),
+    ("employee17@example.com", "Monika Krawczyk", EmploymentType.FULL_TIME),
+    ("employee18@example.com", "Adam Piotrowski", EmploymentType.PART_TIME),
+]
+
+_EMPLOYEE_PASSWORD = "password123"
+# First N employees submit; the next few are left mid-edit (DRAFT); the rest
+# are left untouched (NOT_STARTED) - so the manager's submission tracker has
+# a realistic mix to look at instead of an all-green wall.
+_SUBMITTED_COUNT = 12
+_DRAFT_ONLY_COUNT = 16
+
+
+async def _seed_admin(db: AsyncSession) -> User:
+    assert settings.admin_bootstrap_password is not None  # guaranteed by get_settings()
+
+    result = await db.execute(select(User).where(User.role == Role.ADMIN))
+    existing_admin = result.scalars().first()
+    if existing_admin is not None:
+        # Don't print settings.admin_bootstrap_password here: if this admin's
+        # password was ever changed via PATCH /users/me, that value is stale
+        # and would mislead rather than help.
+        print(f"Admin already exists ({existing_admin.email}); skipping creation.")
+        print(f"Admin login -> email: {existing_admin.email}")
+        print("Admin login -> password: unchanged from whenever it was last set")
+        return existing_admin
+
+    admin = User(
+        email=settings.admin_bootstrap_email,
+        password_hash=hash_password(settings.admin_bootstrap_password),
+        full_name=settings.admin_bootstrap_full_name,
+        role=Role.ADMIN,
+        is_active=True,
+    )
+    db.add(admin)
+    await db.commit()
+    await db.refresh(admin)
+    print(f"Created bootstrap admin: {admin.email}")
+    print(f"Admin login -> email: {admin.email}")
+    print(f"Admin login -> password: {settings.admin_bootstrap_password}")
+    return admin
+
+
+async def _seed_shift_types(db: AsyncSession) -> list[ShiftType]:
+    repo = ShiftTypeRepository(db)
+    service = ShiftTypeService(db)
+    shift_types = []
+    for payload in _SHIFT_TYPE_DEFS:
+        existing = await repo.get_by_code(payload.code)
+        if existing is not None:
+            shift_types.append(existing)
+            continue
+        shift_type = await service.create(payload)
+        shift_types.append(shift_type)
+        print(f"Created shift type: {shift_type.code}")
+    return shift_types
+
+
+async def _seed_rules(db: AsyncSession) -> None:
+    repo = RuleRepository(db)
+    service = RuleService(db)
+    for payload in _RULE_DEFS:
+        if await repo.get_by_code(payload.code) is not None:
+            continue
+        rule = await service.create(payload)
+        print(f"Created rule: {rule.code}")
+
+
+async def _seed_employees(db: AsyncSession) -> list[User]:
+    repo = UserRepository(db)
+    users = []
+    created_count = 0
+    for email, full_name, employment_type in _EMPLOYEE_DEFS:
+        existing = await repo.get_by_email(email)
+        if existing is not None:
+            users.append(existing)
+            continue
+        user = User(
+            email=email,
+            password_hash=hash_password(_EMPLOYEE_PASSWORD),
+            full_name=full_name,
+            role=Role.EMPLOYEE,
+            employment_type=employment_type,
+            is_active=True,
+        )
+        await repo.create(user)
+        users.append(user)
+        created_count += 1
+    await db.commit()
+    for user in users:
+        await db.refresh(user)
+    if created_count:
+        print(f"Created {created_count} demo employees (password: {_EMPLOYEE_PASSWORD}).")
+    return users
+
+
+def _next_month(today: date) -> tuple[int, int]:
+    if today.month == 12:
+        return today.year + 1, 1
+    return today.year, today.month + 1
+
+
+def _plausible_entries(
+    rng: random.Random, slots: list[ShiftSlot], shift_types_by_id: dict[uuid.UUID, ShiftType]
+) -> list[AvailabilityEntryWrite]:
+    """A believable-looking month of availability: ~45% of open slots marked
+    AVAILABLE/PREFERRED at random, then topped up (if needed) so it actually
+    satisfies the demo rules - at least 8 declared shifts and at least one
+    Friday evening - the same way a real, cooperative employee's would.
+    """
+    entries: dict[uuid.UUID, AvailabilityEntryWrite] = {}
+    for slot in slots:
+        if slot.is_closed:
+            continue
+        roll = rng.random()
+        if roll < 0.40:
+            continue  # UNAVAILABLE - simply no row
+        status = AvailabilityStatus.PREFERRED if roll > 0.85 else AvailabilityStatus.AVAILABLE
+        entries[slot.id] = AvailabilityEntryWrite(shift_slot_id=slot.id, status=status)
+
+    if len(entries) < 8:
+        candidates = [s for s in slots if not s.is_closed and s.id not in entries]
+        rng.shuffle(candidates)
+        for slot in candidates:
+            if len(entries) >= 8:
+                break
+            entries[slot.id] = AvailabilityEntryWrite(
+                shift_slot_id=slot.id, status=AvailabilityStatus.AVAILABLE
+            )
+
+    has_friday_evening = any(
+        weekday_of(slot.date) == Weekday.FRI
+        and shift_types_by_id[slot.shift_type_id].code == "EVENING"
+        for slot in slots
+        if slot.id in entries
+    )
+    if not has_friday_evening:
+        friday_evenings = [
+            s
+            for s in slots
+            if not s.is_closed
+            and weekday_of(s.date) == Weekday.FRI
+            and shift_types_by_id[s.shift_type_id].code == "EVENING"
+        ]
+        if friday_evenings:
+            slot = rng.choice(friday_evenings)
+            entries[slot.id] = AvailabilityEntryWrite(
+                shift_slot_id=slot.id, status=AvailabilityStatus.AVAILABLE
+            )
+
+    return list(entries.values())
+
+
+async def _seed_demo_period(db: AsyncSession, employees: list[User], *, actor: User) -> None:
+    year, month = _next_month(date.today())
+    period_service = PeriodService(db)
+
+    period = await PeriodRepository(db).get_by_year_month(year, month)
+    if period is None:
+        period = await period_service.create(PeriodCreate(year=year, month=month))
+        print(f"Created demo period {year}-{month:02d}")
+
+    if period.state == PeriodState.DRAFT:
+        period = await period_service.transition_state(period, PeriodState.COLLECTING, actor=actor)
+
+    if period.state != PeriodState.COLLECTING:
+        print(f"Demo period {year}-{month:02d} is past COLLECTING; skipping availability seed.")
+        return
+
+    slots = await period_service.list_slots(period.id)
+    shift_types_by_id = {st.id: st for st in await ShiftTypeRepository(db).list_all()}
+    availability_service = AvailabilityService(db)
+
+    filled = 0
+    for index, employee in enumerate(employees):
+        if index >= _DRAFT_ONLY_COUNT:
+            continue  # left NOT_STARTED, so the tracker has an empty state to show too
+        entries = _plausible_entries(random.Random(1000 + index), slots, shift_types_by_id)
+        await availability_service.write(user=employee, period=period, entries=entries)
+        if index < _SUBMITTED_COUNT:
+            await availability_service.submit(user=employee, period=period)
+        filled += 1
+    print(
+        f"Seeded availability for {filled} employees on {year}-{month:02d}"
+        f" ({_SUBMITTED_COUNT} submitted, {_DRAFT_ONLY_COUNT - _SUBMITTED_COUNT} left in draft,"
+        f" {len(employees) - _DRAFT_ONLY_COUNT} left not started)."
+    )
 
 
 async def run() -> None:
-    assert settings.admin_bootstrap_password is not None  # guaranteed by get_settings()
-
     async with SessionLocal() as db:
-        result = await db.execute(select(User).where(User.role == Role.ADMIN))
-        existing_admin = result.scalars().first()
-        if existing_admin is None:
-            admin = User(
-                email=settings.admin_bootstrap_email,
-                password_hash=hash_password(settings.admin_bootstrap_password),
-                full_name=settings.admin_bootstrap_full_name,
-                role=Role.ADMIN,
-                is_active=True,
-            )
-            db.add(admin)
-            await db.commit()
-            print(f"Created bootstrap admin: {admin.email}")
-            print(f"Admin login -> email: {admin.email}")
-            print(f"Admin login -> password: {settings.admin_bootstrap_password}")
-        else:
-            # Don't print settings.admin_bootstrap_password here: if this
-            # admin's password was ever changed via PATCH /users/me, that
-            # value is stale and would mislead rather than help.
-            print(f"Admin already exists ({existing_admin.email}); skipping creation.")
-            print(f"Admin login -> email: {existing_admin.email}")
-            print("Admin login -> password: unchanged from whenever it was last set")
+        admin = await _seed_admin(db)
+        await _seed_shift_types(db)
+        await _seed_rules(db)
+        employees = await _seed_employees(db)
+        await _seed_demo_period(db, employees, actor=admin)
 
 
 if __name__ == "__main__":
