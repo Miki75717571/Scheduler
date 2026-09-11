@@ -1,0 +1,69 @@
+[project]
+name = "cafeteria-scheduler-backend"
+version = "0.1.0"
+description = "Backend for the cafeteria shift scheduler"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0.25",
+    "alembic>=1.13",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "psycopg[binary]>=3.2",
+    "asyncpg>=0.30",
+    "aiosqlite>=0.20",
+    "pyjwt>=2.9",
+    "argon2-cffi>=23.1",
+    "ortools>=9.11",
+    "resend>=2.4",
+    "python-multipart>=0.0.12",
+    "email-validator>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's idiomatic `= Depends(...)` / `= Cookie(...)` default args are safe:
+# these are evaluated once by Starlette's dependency injector, not mutated.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Cookie", "fastapi.Query"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["ortools.*", "resend.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+# All async fixtures/tests share one event loop for the whole session, since the
+# per-test `db_session` fixture and the session-scoped `_schema` fixture (see
+# tests/conftest.py) both use the same asyncpg-backed engine - asyncpg
+# connections are bound to the loop they were created on.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"

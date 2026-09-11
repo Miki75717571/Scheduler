@@ -1,0 +1,55 @@
+{
+  "common": {
+    "appName": "Cafeteria Scheduler",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit"
+  },
+  "health": {
+    "checking": "Checking backend connection…",
+    "ok": "Backend is reachable.",
+    "error": "Could not reach the backend."
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "loginButton": "Sign in",
+    "logout": "Sign out",
+    "errors": {
+      "auth.invalid_credentials": "Incorrect email or password.",
+      "auth.invalid_token": "Your session has expired. Please sign in again.",
+      "auth.missing_token": "Please sign in to continue.",
+      "auth.forbidden": "You don't have permission to do that."
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "fullName": "Full name",
+    "phone": "Phone",
+    "locale": "Language",
+    "newPassword": "New password (leave blank to keep current)",
+    "saved": "Profile updated."
+  },
+  "invitation": {
+    "acceptTitle": "Set up your account",
+    "fullName": "Full name",
+    "password": "Choose a password",
+    "acceptButton": "Create account",
+    "success": "Account created. You can now sign in.",
+    "errors": {
+      "invitation.not_found": "This invitation link is invalid.",
+      "invitation.expired": "This invitation has expired. Ask your manager for a new one.",
+      "invitation.already_used": "This invitation has already been used.",
+      "invitation.email_already_registered": "That email is already registered."
+    }
+  },
+  "validation": {
+    "required": "This field is required.",
+    "minLength": "Must be at least {{count}} characters."
+  },
+  "error": {
+    "unknown": "Something went wrong. Please try again."
+  }
+}

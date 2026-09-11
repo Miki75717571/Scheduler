@@ -1,0 +1,55 @@
+{
+  "common": {
+    "appName": "Grafik Stołówki",
+    "loading": "Ładowanie…",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "submit": "Wyślij"
+  },
+  "health": {
+    "checking": "Sprawdzanie połączenia z serwerem…",
+    "ok": "Serwer jest dostępny.",
+    "error": "Nie można połączyć się z serwerem."
+  },
+  "auth": {
+    "loginTitle": "Zaloguj się",
+    "email": "Email",
+    "password": "Hasło",
+    "loginButton": "Zaloguj się",
+    "logout": "Wyloguj się",
+    "errors": {
+      "auth.invalid_credentials": "Nieprawidłowy email lub hasło.",
+      "auth.invalid_token": "Twoja sesja wygasła. Zaloguj się ponownie.",
+      "auth.missing_token": "Zaloguj się, aby kontynuować.",
+      "auth.forbidden": "Nie masz uprawnień do tej operacji."
+    }
+  },
+  "profile": {
+    "title": "Profil",
+    "fullName": "Imię i nazwisko",
+    "phone": "Telefon",
+    "locale": "Język",
+    "newPassword": "Nowe hasło (zostaw puste, aby nie zmieniać)",
+    "saved": "Profil zaktualizowany."
+  },
+  "invitation": {
+    "acceptTitle": "Skonfiguruj swoje konto",
+    "fullName": "Imię i nazwisko",
+    "password": "Wybierz hasło",
+    "acceptButton": "Utwórz konto",
+    "success": "Konto zostało utworzone. Możesz się teraz zalogować.",
+    "errors": {
+      "invitation.not_found": "Ten link z zaproszeniem jest nieprawidłowy.",
+      "invitation.expired": "To zaproszenie wygasło. Poproś managera o nowe.",
+      "invitation.already_used": "To zaproszenie zostało już wykorzystane.",
+      "invitation.email_already_registered": "Ten adres email jest już zarejestrowany."
+    }
+  },
+  "validation": {
+    "required": "To pole jest wymagane.",
+    "minLength": "Musi mieć co najmniej {{count}} znaków."
+  },
+  "error": {
+    "unknown": "Coś poszło nie tak. Spróbuj ponownie."
+  }
+}

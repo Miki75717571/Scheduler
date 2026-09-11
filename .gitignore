@@ -1,0 +1,28 @@
+## Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/.venv/
+
+## Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+coverage/
+
+## Env / secrets
+.env
+!.env.example
+frontend/.env
+!frontend/.env.example
+
+## Zero-setup dev state: sqlite db files + auto-generated dev secrets cache
+backend/.dev/
+
+## Misc
+.DS_Store
+*.log
