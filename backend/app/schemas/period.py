@@ -29,3 +29,8 @@ class PeriodRead(BaseModel):
 
 class PeriodStateUpdate(BaseModel):
     state: PeriodState
+    # Only meaningful for a GENERATED -> PUBLISHED transition: publishing is
+    # normally refused while ERROR-severity schedule violations exist
+    # (see app/api/v1/periods.py); this explicitly acknowledges and overrides
+    # that block, which gets recorded in AuditLog.
+    override_violations: bool = False

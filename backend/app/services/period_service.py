@@ -5,11 +5,13 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.audit_log import AuditLog
 from app.models.availability import AvailabilitySubmission, SubmissionStatus
 from app.models.schedule_period import PeriodState, SchedulePeriod
 from app.models.shift_slot import ShiftSlot
 from app.models.shift_type import ShiftType
 from app.models.user import User
+from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.availability_repository import AvailabilityRepository
 from app.repositories.period_repository import PeriodRepository
 from app.repositories.shift_slot_repository import ShiftSlotRepository
@@ -67,6 +69,7 @@ class PeriodService:
         self._shift_types = ShiftTypeRepository(db)
         self._users = UserRepository(db)
         self._availability = AvailabilityRepository(db)
+        self._audit_log = AuditLogRepository(db)
 
     async def create(self, payload: PeriodCreate) -> SchedulePeriod:
         if await self._periods.get_by_year_month(payload.year, payload.month) is not None:
@@ -98,7 +101,12 @@ class PeriodService:
         return await self._periods.list_all()
 
     async def transition_state(
-        self, period: SchedulePeriod, target: PeriodState, *, actor: User
+        self,
+        period: SchedulePeriod,
+        target: PeriodState,
+        *,
+        actor: User,
+        override_used: bool = False,
     ) -> SchedulePeriod:
         expected_next = _LEGAL_TRANSITIONS.get(period.state)
         if expected_next != target:
@@ -106,12 +114,24 @@ class PeriodService:
                 "period.illegal_transition", {"from": period.state.value, "to": target.value}
             )
 
+        previous_state = period.state
         period.state = target
         if target == PeriodState.COLLECTING:
             await self._ensure_submissions_for_active_users(period)
         elif target == PeriodState.PUBLISHED:
             period.published_at = datetime.now(UTC)
             period.published_by_user_id = actor.id
+            await self._audit_log.create(
+                AuditLog(
+                    actor_user_id=actor.id,
+                    period_id=period.id,
+                    action="period.publish_override" if override_used else "period.publish",
+                    entity_type="SchedulePeriod",
+                    entity_id=period.id,
+                    before={"state": previous_state.value},
+                    after={"state": target.value, "override_used": override_used},
+                )
+            )
 
         await self._periods.save(period)
         await self._db.commit()

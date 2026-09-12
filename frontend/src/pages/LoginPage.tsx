@@ -58,7 +58,7 @@ export function LoginPage() {
 
       {errorKey && (
         <p className="text-sm text-destructive">
-          {t(`auth.errors.${errorKey}`, { defaultValue: t("error.unknown") })}
+          {t(`apiErrors.${errorKey}`, { defaultValue: t("error.unknown") })}
         </p>
       )}
 

@@ -13,6 +13,13 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 coverage/
+*.tsbuildinfo
+# tsc -b output for vite.config.ts (tsconfig.node.json) - if this ever
+# reappears next to vite.config.ts, Vite silently prefers it over the .ts
+# source and every config change goes ignored. See tsconfig.node.json's
+# outDir for the actual fix; this is a backstop.
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 ## Env / secrets
 .env

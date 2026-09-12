@@ -10,7 +10,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api.v1 import auth, availability, health, invitations, periods, rules, shift_types, users
+from app.api.v1 import (
+    assignments,
+    auth,
+    availability,
+    health,
+    invitations,
+    periods,
+    rules,
+    shift_types,
+    users,
+)
 from app.core.config import describe_database, settings
 from app.db.session import engine
 
@@ -37,6 +47,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="Cafeteria Scheduler API", lifespan=lifespan)
 
+# Phone/LAN access goes through the Vite dev proxy (frontend/vite.config.ts),
+# not directly to this process - uvicorn stays bound to 127.0.0.1 (see
+# start.ps1). The browser's requests are same-origin as far as it's
+# concerned, so CORS is never actually exercised in that path; this list only
+# matters for a browser hitting the API directly (e.g. a separately-deployed
+# frontend in production, or manual testing against :8000).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -70,3 +86,4 @@ app.include_router(shift_types.router, prefix=API_V1_PREFIX)
 app.include_router(periods.router, prefix=API_V1_PREFIX)
 app.include_router(availability.router, prefix=API_V1_PREFIX)
 app.include_router(rules.router, prefix=API_V1_PREFIX)
+app.include_router(assignments.router, prefix=API_V1_PREFIX)

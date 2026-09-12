@@ -10,6 +10,8 @@ from app.db.base import Base
 from app.db.session import configure_sqlite, get_db
 from app.main import app
 from app.models import (  # noqa: F401  registers tables on Base.metadata
+    assignment,
+    audit_log,
     availability,
     invitation,
     rule,

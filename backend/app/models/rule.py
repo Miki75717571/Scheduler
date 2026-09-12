@@ -11,15 +11,21 @@ from app.db.types import StrEnumType
 
 
 class RuleType(enum.StrEnum):
-    """Availability-phase types only for now (ARCHITECTURE.md ss3.5's
-    schedule-phase types land with the Phase 3 validator). Adding one means
-    a new handler in app/rules/availability_validator.py plus widening the
-    ck_rules_type CHECK constraint via migration - never an inline `if`.
+    """Availability-phase and schedule-phase types (ARCHITECTURE.md ss3.5).
+    Adding one means a new handler in app/rules/availability_validator.py or
+    app/rules/schedule_validator.py plus widening the ck_rules_type CHECK
+    constraint via migration - never an inline `if`.
     """
 
     MIN_AVAILABILITY_COUNT = "MIN_AVAILABILITY_COUNT"
     MIN_AVAILABILITY_IN_SET = "MIN_AVAILABILITY_IN_SET"
     MIN_AVAILABILITY_WEEKEND = "MIN_AVAILABILITY_WEEKEND"
+    ONE_SHIFT_PER_DAY = "ONE_SHIFT_PER_DAY"
+    MIN_REST_HOURS = "MIN_REST_HOURS"
+    MAX_CONSECUTIVE_DAYS = "MAX_CONSECUTIVE_DAYS"
+    MIN_SHIFTS_PER_MONTH = "MIN_SHIFTS_PER_MONTH"
+    MAX_SHIFTS_PER_MONTH = "MAX_SHIFTS_PER_MONTH"
+    MAX_WEEKEND_SHIFTS = "MAX_WEEKEND_SHIFTS"
 
 
 class RuleScope(enum.StrEnum):
@@ -44,7 +50,9 @@ class Rule(Base):
     __table_args__ = (
         CheckConstraint(
             "type IN ('MIN_AVAILABILITY_COUNT','MIN_AVAILABILITY_IN_SET',"
-            "'MIN_AVAILABILITY_WEEKEND')",
+            "'MIN_AVAILABILITY_WEEKEND','ONE_SHIFT_PER_DAY','MIN_REST_HOURS',"
+            "'MAX_CONSECUTIVE_DAYS','MIN_SHIFTS_PER_MONTH','MAX_SHIFTS_PER_MONTH',"
+            "'MAX_WEEKEND_SHIFTS')",
             name="ck_rules_type",
         ),
         CheckConstraint("scope IN ('GLOBAL','EMPLOYMENT_TYPE','USER')", name="ck_rules_scope"),

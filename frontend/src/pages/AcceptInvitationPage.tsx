@@ -65,7 +65,7 @@ export function AcceptInvitationPage() {
   if (previewErrorKey) {
     return (
       <p className="text-sm text-destructive">
-        {t(`invitation.errors.${previewErrorKey}`, { defaultValue: t("error.unknown") })}
+        {t(`apiErrors.${previewErrorKey}`, { defaultValue: t("error.unknown") })}
       </p>
     );
   }
@@ -99,7 +99,7 @@ export function AcceptInvitationPage() {
 
       {submitErrorKey && (
         <p className="text-sm text-destructive">
-          {t(`invitation.errors.${submitErrorKey}`, { defaultValue: t("error.unknown") })}
+          {t(`apiErrors.${submitErrorKey}`, { defaultValue: t("error.unknown") })}
         </p>
       )}
 

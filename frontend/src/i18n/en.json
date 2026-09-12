@@ -4,7 +4,13 @@
     "loading": "Loading…",
     "save": "Save",
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "submit": "Submit"
+  },
+  "nav": {
+    "availability": "My availability",
+    "manager": "Manager",
+    "profile": "Profile"
   },
   "health": {
     "checking": "Checking backend connection…",
@@ -16,13 +22,7 @@
     "email": "Email",
     "password": "Password",
     "loginButton": "Sign in",
-    "logout": "Sign out",
-    "errors": {
-      "auth.invalid_credentials": "Incorrect email or password.",
-      "auth.invalid_token": "Your session has expired. Please sign in again.",
-      "auth.missing_token": "Please sign in to continue.",
-      "auth.forbidden": "You don't have permission to do that."
-    }
+    "logout": "Sign out"
   },
   "profile": {
     "title": "Profile",
@@ -37,13 +37,7 @@
     "fullName": "Full name",
     "password": "Choose a password",
     "acceptButton": "Create account",
-    "success": "Account created. You can now sign in.",
-    "errors": {
-      "invitation.not_found": "This invitation link is invalid.",
-      "invitation.expired": "This invitation has expired. Ask your manager for a new one.",
-      "invitation.already_used": "This invitation has already been used.",
-      "invitation.email_already_registered": "That email is already registered."
-    }
+    "success": "Account created. You can now sign in."
   },
   "validation": {
     "required": "This field is required.",
@@ -51,5 +45,133 @@
   },
   "error": {
     "unknown": "Something went wrong. Please try again."
+  },
+  "apiErrors": {
+    "auth.invalid_credentials": "Incorrect email or password.",
+    "auth.invalid_token": "Your session has expired. Please sign in again.",
+    "auth.missing_token": "Please sign in to continue.",
+    "auth.forbidden": "You don't have permission to do that.",
+    "network.unreachable": "Can't reach the server. Check your connection and try again.",
+    "invitation.not_found": "This invitation link is invalid.",
+    "invitation.expired": "This invitation has expired. Ask your manager for a new one.",
+    "invitation.already_used": "This invitation has already been used.",
+    "invitation.email_already_registered": "That email is already registered.",
+    "user.not_found": "That user could not be found.",
+    "validation.error": "Please check your input and try again.",
+    "period.not_found": "This schedule period could not be found.",
+    "period.already_exists": "A period already exists for that year and month.",
+    "period.illegal_transition": "That change isn't allowed from the current status.",
+    "shift_slot.not_found": "That shift could not be found.",
+    "shift_slot.invalid_staff_levels": "Minimum, required and maximum staff must satisfy min ≤ required ≤ max.",
+    "availability.hard_rules_failed": "Some required rules aren't met yet — see the list above.",
+    "availability.invalid_shift_slot": "That shift doesn't belong to this period.",
+    "availability.period_not_editable": "This period can't be edited right now.",
+    "availability.reopen_requires_locked_period": "Only a locked period can be reopened for an employee."
+  },
+  "weekdaysShort": {
+    "MON": "Mon",
+    "TUE": "Tue",
+    "WED": "Wed",
+    "THU": "Thu",
+    "FRI": "Fri",
+    "SAT": "Sat",
+    "SUN": "Sun"
+  },
+  "weekdaysFull": {
+    "MON": "Monday",
+    "TUE": "Tuesday",
+    "WED": "Wednesday",
+    "THU": "Thursday",
+    "FRI": "Friday",
+    "SAT": "Saturday",
+    "SUN": "Sunday"
+  },
+  "rules": {
+    "MIN_AVAILABILITY_COUNT": "{{actual}}/{{required}} shifts declared",
+    "MIN_AVAILABILITY_WEEKEND": "{{actual}}/{{required}} weekend shifts declared",
+    "MIN_AVAILABILITY_IN_SET": "{{weekday}} {{shift}}: {{actual}}/{{required}}"
+  },
+  "availability": {
+    "title": "My availability",
+    "periodLabel": "Period",
+    "deadline": "Deadline: {{date}}",
+    "deadlineNone": "No deadline set.",
+    "countdownDays": "{{count}} day(s) left",
+    "countdownHours": "{{count}} hour(s) left",
+    "countdownPassed": "Deadline passed",
+    "noPeriods": "No schedule periods yet. Ask your manager to create one.",
+    "readOnlyDraft": "This period hasn't opened for availability collection yet.",
+    "readOnlyLocked": "The deadline has passed and availability is locked. Ask your manager to reopen it if you need to change something.",
+    "readOnlyGenerated": "The schedule has been generated for this period — availability can no longer be edited.",
+    "readOnlyPublished": "The schedule has been published — availability can no longer be edited.",
+    "reopenedNotice": "Your manager reopened this period for you — you can make changes again.",
+    "bulkAllMornings": "All mornings",
+    "bulkAllWeekdayEvenings": "All weekday evenings",
+    "bulkAllWeekends": "All weekends",
+    "bulkClearAll": "Clear all",
+    "bulkCopyLastMonth": "Copy from last month",
+    "bulkConfirmClear": "Clear all your availability for this month?",
+    "saveStatusSaving": "Saving…",
+    "saveStatusSaved": "Saved",
+    "saveStatusError": "Save failed.",
+    "saveStatusErrorFinal": "Save failed. Check your connection and try again.",
+    "retryNow": "Retry now",
+    "requirementsTitle": "Requirements",
+    "requirementsAllMet": "All requirements met.",
+    "submitButton": "Submit availability",
+    "submitDisabledHint": "Complete the requirements above before you can submit.",
+    "submitSuccess": "Availability submitted!",
+    "submissionStatus": {
+      "NOT_STARTED": "Not started",
+      "DRAFT": "Draft — not yet submitted",
+      "SUBMITTED": "Submitted"
+    },
+    "closedDay": "Closed",
+    "chipState": {
+      "UNAVAILABLE": "Unavailable",
+      "AVAILABLE": "Available",
+      "PREFERRED": "Preferred"
+    }
+  },
+  "manager": {
+    "periodsTitle": "Schedule periods",
+    "createPeriod": "Create a new period",
+    "year": "Year",
+    "month": "Month",
+    "deadlineOptional": "Availability deadline (optional)",
+    "createButton": "Create period",
+    "stateLabel": {
+      "DRAFT": "Draft",
+      "COLLECTING": "Collecting availability",
+      "LOCKED": "Locked",
+      "GENERATED": "Generated",
+      "PUBLISHED": "Published"
+    },
+    "transition": {
+      "openCollecting": "Open for availability collection",
+      "lock": "Lock availability",
+      "generate": "Mark schedule as generated",
+      "publish": "Publish schedule"
+    },
+    "periodFinal": "This period has reached its final state.",
+    "confirmTransition": "Are you sure? \"{{action}}\" can't be undone.",
+    "trackerTitle": "Submission tracker",
+    "trackerCounts": "{{submitted}} submitted · {{draft}} draft · {{notStarted}} not started",
+    "columnName": "Name",
+    "columnStatus": "Status",
+    "columnSubmittedAt": "Submitted at",
+    "columnActions": "Actions",
+    "reopenButton": "Reopen for this employee",
+    "revokeReopenButton": "Revoke reopen",
+    "reopenedBadge": "reopened",
+    "slotsTitle": "Daily staffing",
+    "slotDate": "Date",
+    "slotShift": "Shift",
+    "slotMin": "Min",
+    "slotRequired": "Required",
+    "slotMax": "Max",
+    "slotClosed": "Closed",
+    "slotNote": "Note",
+    "daysRemaining": "{{count}} day(s) remaining until deadline"
   }
 }

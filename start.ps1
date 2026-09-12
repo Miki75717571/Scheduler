@@ -36,6 +36,22 @@ function Test-CommandExists {
     return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
+function Get-LanIPAddress {
+    # Best-effort LAN IPv4 for phone testing (see CLAUDE.md's "test it on a
+    # real phone" requirement): the first non-loopback, non-link-local
+    # (169.254.x.x) IPv4 address with a real gateway, i.e. an actual
+    # Wi-Fi/Ethernet adapter rather than a virtual/host-only one.
+    $candidate = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.IPAddress -ne "127.0.0.1" -and
+            -not $_.IPAddress.StartsWith("169.254.") -and
+            (Get-NetRoute -InterfaceIndex $_.InterfaceIndex -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue)
+        } |
+        Select-Object -First 1
+    if ($candidate) { return $candidate.IPAddress }
+    return $null
+}
+
 function Test-PortOpen {
     # Queries the OS listener table directly rather than opening a probe
     # connection: uvicorn binds 127.0.0.1, but Vite's default `localhost`
@@ -147,12 +163,23 @@ if ($backendReady) {
 Start-Sleep -Seconds 2
 Start-Process "http://localhost:5173"
 
+$lanIp = Get-LanIPAddress
+
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Green
 Write-Host " Cafeteria Scheduler is running"
 Write-Host ""
 Write-Host " Frontend: http://localhost:5173"
 Write-Host " Backend:  http://localhost:8000  (API docs at /docs)"
+if ($lanIp) {
+    Write-Host ""
+    Write-Host " On your phone (same Wi-Fi as this PC): http://${lanIp}:5173" -ForegroundColor Cyan
+} else {
+    Write-Host ""
+    Write-Host " Could not detect a LAN IP for phone testing - find yours with 'ipconfig'" -ForegroundColor Yellow
+    Write-Host " (look for the IPv4 Address of your Wi-Fi/Ethernet adapter) and open" -ForegroundColor Yellow
+    Write-Host " http://<that IP>:5173 on your phone." -ForegroundColor Yellow
+}
 Write-Host ""
 foreach ($line in $seedOutput) {
     if ($line -match "Admin login") {

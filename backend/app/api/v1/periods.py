@@ -5,15 +5,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import CurrentUser, require_role
 from app.db.session import get_db
+from app.models.schedule_period import PeriodState
 from app.models.user import Role
 from app.schemas.period import PeriodCreate, PeriodRead, PeriodStateUpdate
 from app.schemas.shift_slot import ShiftSlotRead, ShiftSlotUpdate
 from app.services.period_service import PeriodError, PeriodService
+from app.services.schedule_service import ScheduleService
 
 router = APIRouter(prefix="/periods", tags=["periods"])
 
 _NOT_FOUND_SUFFIXES = (".not_found",)
-_CONFLICT_KEYS = {"period.already_exists", "period.illegal_transition"}
+_CONFLICT_KEYS = {
+    "period.already_exists",
+    "period.illegal_transition",
+    "period.publish_blocked_by_errors",
+}
 
 
 def _http_error(exc: PeriodError) -> HTTPException:
@@ -72,7 +78,18 @@ async def update_period_state(
     service = PeriodService(db)
     try:
         period = await service.get(period_id)
-        period = await service.transition_state(period, payload.state, actor=current_user)
+
+        override_used = False
+        if payload.state == PeriodState.PUBLISHED and period.state == PeriodState.GENERATED:
+            violations = await ScheduleService(db).compute_violations(period)
+            error_count = sum(1 for v in violations if v.severity == "ERROR")
+            if error_count and not payload.override_violations:
+                raise PeriodError("period.publish_blocked_by_errors", {"error_count": error_count})
+            override_used = error_count > 0 and payload.override_violations
+
+        period = await service.transition_state(
+            period, payload.state, actor=current_user, override_used=override_used
+        )
     except PeriodError as exc:
         raise _http_error(exc) from exc
     return PeriodRead.model_validate(period)

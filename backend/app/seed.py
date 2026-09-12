@@ -12,12 +12,20 @@ tracker has something to show).
 Idempotent: re-running `uv run python -m app.seed` skips anything that
 already exists (matched by code/email/year+month) rather than duplicating it
 or crashing.
+
+Phase 3 adds: the six SCHEDULE-phase rules (ARCHITECTURE.md ss3.5's defaults)
+and a second demo period - the CURRENT month, advanced to GENERATED with a
+handful of manual assignments - deliberately containing one of each
+violation CLAUDE.md's Phase 3 brief calls out: an understaffed day (ERROR),
+a rest-period violation (ERROR), and one person below their (overridden)
+contract minimum (WARNING). See _seed_demo_schedule below.
 """
 
 import asyncio
+import calendar
 import random
 import uuid
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,17 +33,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal
+from app.models.assignment import AssignmentSource
 from app.models.availability import AvailabilityStatus
 from app.models.rule import RulePhase, RuleScope, RuleSeverity, RuleType
 from app.models.schedule_period import PeriodState
 from app.models.shift_slot import ShiftSlot
 from app.models.shift_type import ShiftType
 from app.models.user import EmploymentType, Role, User
+from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.period_repository import PeriodRepository
 from app.repositories.rule_repository import RuleRepository
 from app.repositories.shift_type_repository import ShiftTypeRepository
 from app.repositories.user_repository import UserRepository
 from app.rules.weekdays import ALL_WEEKDAYS_MASK, WEEKEND_MASK, Weekday, weekday_of
+from app.schemas.assignment import AssignmentCreate
 from app.schemas.availability import AvailabilityEntryWrite
 from app.schemas.period import PeriodCreate
 from app.schemas.rule import RuleCreate
@@ -43,6 +54,7 @@ from app.schemas.shift_type import ShiftTypeCreate
 from app.services.availability_service import AvailabilityService
 from app.services.period_service import PeriodService
 from app.services.rule_service import RuleService
+from app.services.schedule_service import ScheduleService
 from app.services.shift_type_service import ShiftTypeService
 
 _SHIFT_TYPE_DEFS = [
@@ -108,7 +120,74 @@ _RULE_DEFS = [
         severity=RuleSeverity.HARD,
         phase=RulePhase.AVAILABILITY,
     ),
+    # --- SCHEDULE-phase (ARCHITECTURE.md ss3.5 defaults) ---
+    RuleCreate(
+        code="one_shift_per_day",
+        name_pl="Jedna zmiana dziennie",
+        name_en="One shift per day",
+        type=RuleType.ONE_SHIFT_PER_DAY,
+        scope=RuleScope.GLOBAL,
+        params={},
+        severity=RuleSeverity.HARD,
+        phase=RulePhase.SCHEDULE,
+    ),
+    RuleCreate(
+        code="min_11h_rest",
+        name_pl="Minimum 11 godzin odpoczynku",
+        name_en="Minimum 11 hours rest",
+        type=RuleType.MIN_REST_HOURS,
+        scope=RuleScope.GLOBAL,
+        params={"h": 11},
+        severity=RuleSeverity.HARD,
+        phase=RulePhase.SCHEDULE,
+    ),
+    RuleCreate(
+        code="max_5_consecutive_days",
+        name_pl="Maksymalnie 5 dni z rzedu",
+        name_en="Maximum 5 consecutive days",
+        type=RuleType.MAX_CONSECUTIVE_DAYS,
+        scope=RuleScope.GLOBAL,
+        params={"n": 5},
+        severity=RuleSeverity.SOFT,
+        phase=RulePhase.SCHEDULE,
+    ),
+    RuleCreate(
+        code="min_5_shifts_per_month",
+        name_pl="Minimum 5 zmian w miesiacu",
+        name_en="Minimum 5 shifts per month",
+        type=RuleType.MIN_SHIFTS_PER_MONTH,
+        scope=RuleScope.GLOBAL,
+        params={"n": 5},
+        severity=RuleSeverity.SOFT,
+        phase=RulePhase.SCHEDULE,
+    ),
+    RuleCreate(
+        code="max_18_shifts_per_month",
+        name_pl="Maksymalnie 18 zmian w miesiacu",
+        name_en="Maximum 18 shifts per month",
+        type=RuleType.MAX_SHIFTS_PER_MONTH,
+        scope=RuleScope.GLOBAL,
+        params={"n": 18},
+        severity=RuleSeverity.SOFT,
+        phase=RulePhase.SCHEDULE,
+    ),
+    RuleCreate(
+        code="max_3_weekend_shifts",
+        name_pl="Maksymalnie 3 zmiany weekendowe",
+        name_en="Maximum 3 weekend shifts",
+        type=RuleType.MAX_WEEKEND_SHIFTS,
+        scope=RuleScope.GLOBAL,
+        params={"n": 3},
+        severity=RuleSeverity.SOFT,
+        phase=RulePhase.SCHEDULE,
+    ),
 ]
+
+# One person deliberately kept below their own contract minimum (which
+# overrides the min_5_shifts_per_month global default above) rather than the
+# global one - proves the per-user override path, not just the rule itself.
+_CONTRACT_MIN_OVERRIDE = 10
+_CONTRACT_MIN_ACTUAL = 6
 
 _EMPLOYEE_DEFS: list[tuple[str, str, EmploymentType]] = [
     ("employee01@example.com", "Anna Kowalska", EmploymentType.FULL_TIME),
@@ -315,6 +394,115 @@ async def _seed_demo_period(db: AsyncSession, employees: list[User], *, actor: U
     )
 
 
+def _all_dates(year: int, month: int) -> list[date]:
+    days_in_month = calendar.monthrange(year, month)[1]
+    return [date(year, month, day) for day in range(1, days_in_month + 1)]
+
+
+async def _seed_demo_schedule(db: AsyncSession, employees: list[User], *, actor: User) -> None:
+    """A second demo period - the CURRENT month, distinct from next month's
+    COLLECTING one above - already advanced to GENERATED with a handful of
+    manual assignments. Deliberately left mostly unassigned (a manager
+    mid-way through manual scheduling, not a finished month) except for
+    three targeted scenarios: see module docstring.
+    """
+    year, month = date.today().year, date.today().month
+    period_service = PeriodService(db)
+
+    period = await PeriodRepository(db).get_by_year_month(year, month)
+    if period is None:
+        period = await period_service.create(PeriodCreate(year=year, month=month))
+        print(f"Created demo schedule period {year}-{month:02d}")
+
+    order = [
+        PeriodState.DRAFT,
+        PeriodState.COLLECTING,
+        PeriodState.LOCKED,
+        PeriodState.GENERATED,
+        PeriodState.PUBLISHED,
+    ]
+    if order.index(period.state) > order.index(PeriodState.GENERATED):
+        print(f"Demo schedule period {year}-{month:02d} is past GENERATED; skipping.")
+        return
+    while period.state != PeriodState.GENERATED:
+        period = await period_service.transition_state(
+            period, order[order.index(period.state) + 1], actor=actor
+        )
+
+    if await AssignmentRepository(db).list_by_period(period.id):
+        print(f"Demo schedule period {year}-{month:02d} already has assignments; skipping.")
+        return
+
+    slots = await period_service.list_slots(period.id)
+    shift_types_by_id = {st.id: st for st in await ShiftTypeRepository(db).list_all()}
+    slot_by_date_and_code = {
+        (slot.date, shift_types_by_id[slot.shift_type_id].code): slot for slot in slots
+    }
+    schedule_service = ScheduleService(db)
+
+    async def _assign(employee: User, slot: ShiftSlot) -> None:
+        await schedule_service.create_assignment(
+            period,
+            AssignmentCreate(
+                shift_slot_id=slot.id, user_id=employee.id, source=AssignmentSource.MANUAL
+            ),
+            actor=actor,
+        )
+
+    # Scenario 1: below (overridden) contract minimum. Anna's personal
+    # contract_min_shifts (10) is stricter than the global min_5_shifts rule,
+    # and her 6 assigned shifts clear that global default but not her own -
+    # proving the per-user override actually takes effect.
+    contract_employee = employees[0]
+    contract_employee.contract_min_shifts = _CONTRACT_MIN_OVERRIDE
+    await UserRepository(db).save(contract_employee)
+    await db.commit()
+
+    weekdays = [
+        d for d in _all_dates(year, month) if weekday_of(d) not in (Weekday.SAT, Weekday.SUN)
+    ]
+    for d in weekdays[::3][:_CONTRACT_MIN_ACTUAL]:
+        slot = slot_by_date_and_code.get((d, "MORNING"))
+        if slot is not None:
+            await _assign(contract_employee, slot)
+
+    # Scenario 2: rest-period violation. Piotr works the first EVENING shift
+    # of the month then the very next MORNING shift - 8 hours of rest,
+    # short of the 11-hour min_11h_rest rule.
+    rest_employee = employees[1]
+    rest_day = next(
+        d
+        for d in _all_dates(year, month)
+        if (d, "EVENING") in slot_by_date_and_code
+        and (d + timedelta(days=1), "MORNING") in slot_by_date_and_code
+    )
+    await _assign(rest_employee, slot_by_date_and_code[(rest_day, "EVENING")])
+    await _assign(rest_employee, slot_by_date_and_code[(rest_day + timedelta(days=1), "MORNING")])
+
+    # Scenario 3: understaffed day. EVENING's default min_staff is 2 - one
+    # person here is deliberately below that minimum (an ERROR, not just a
+    # WARNING, since it's below min_staff rather than merely below
+    # required_staff).
+    understaffed_employee = employees[2]
+    rest_dates = (rest_day, rest_day + timedelta(days=1))
+    understaffed_day = next(
+        d
+        for d in _all_dates(year, month)
+        if (d, "EVENING") in slot_by_date_and_code and d not in rest_dates
+    )
+    await _assign(understaffed_employee, slot_by_date_and_code[(understaffed_day, "EVENING")])
+
+    print(
+        f"Seeded demo schedule for {year}-{month:02d}: "
+        f"{contract_employee.full_name} has {_CONTRACT_MIN_ACTUAL}/{_CONTRACT_MIN_OVERRIDE} "
+        "contract shifts, "
+        f"{rest_employee.full_name} has a rest violation on "
+        f"{rest_day.isoformat()} -> {(rest_day + timedelta(days=1)).isoformat()}, "
+        f"{understaffed_employee.full_name}'s {understaffed_day.isoformat()} EVENING shift "
+        "is understaffed below minimum."
+    )
+
+
 async def run() -> None:
     async with SessionLocal() as db:
         admin = await _seed_admin(db)
@@ -322,6 +510,7 @@ async def run() -> None:
         await _seed_rules(db)
         employees = await _seed_employees(db)
         await _seed_demo_period(db, employees, actor=admin)
+        await _seed_demo_schedule(db, employees, actor=admin)
 
 
 if __name__ == "__main__":

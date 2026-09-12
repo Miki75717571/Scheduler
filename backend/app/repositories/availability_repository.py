@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Iterable
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,3 +85,23 @@ class AvailabilityRepository:
                 Availability.shift_slot_id == shift_slot_id,
             )
         )
+
+    async def list_entries_for_slots(
+        self, shift_slot_ids: Iterable[uuid.UUID]
+    ) -> list[tuple[uuid.UUID, uuid.UUID, AvailabilityStatus]]:
+        """(user_id, shift_slot_id, status) for every declared entry against
+        the given slots, across every employee - used by the schedule
+        validator's "assigned despite unavailable" check and the manager's
+        "who is available for this slot" endpoint. A row only ever exists for
+        AVAILABLE/PREFERRED (see Availability's docstring), so this never
+        needs to special-case UNAVAILABLE - its absence already means that.
+        """
+        ids = list(shift_slot_ids)
+        if not ids:
+            return []
+        result = await self._db.execute(
+            select(AvailabilitySubmission.user_id, Availability.shift_slot_id, Availability.status)
+            .join(Availability, Availability.submission_id == AvailabilitySubmission.id)
+            .where(Availability.shift_slot_id.in_(ids))
+        )
+        return [(row[0], row[1], row[2]) for row in result.all()]

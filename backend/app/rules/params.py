@@ -46,5 +46,21 @@ def validate_rule_params(rule_type: RuleType, params: dict[str, Any]) -> None:
             raise RuleParamsError("rule.invalid_params", {"field": "shift"})
         _reject_unknown_fields(params, {"n", "weekday", "shift"})
 
+    elif rule_type == RuleType.ONE_SHIFT_PER_DAY:
+        _reject_unknown_fields(params, set())
+
+    elif rule_type == RuleType.MIN_REST_HOURS:
+        _require_non_negative_int(params, "h")
+        _reject_unknown_fields(params, {"h"})
+
+    elif rule_type in (
+        RuleType.MAX_CONSECUTIVE_DAYS,
+        RuleType.MIN_SHIFTS_PER_MONTH,
+        RuleType.MAX_SHIFTS_PER_MONTH,
+        RuleType.MAX_WEEKEND_SHIFTS,
+    ):
+        _require_non_negative_int(params, "n")
+        _reject_unknown_fields(params, {"n"})
+
     else:
         raise RuleParamsError("rule.unsupported_type")

@@ -4,7 +4,13 @@
     "loading": "Ładowanie…",
     "save": "Zapisz",
     "cancel": "Anuluj",
+    "confirm": "Potwierdź",
     "submit": "Wyślij"
+  },
+  "nav": {
+    "availability": "Moja dostępność",
+    "manager": "Manager",
+    "profile": "Profil"
   },
   "health": {
     "checking": "Sprawdzanie połączenia z serwerem…",
@@ -16,13 +22,7 @@
     "email": "Email",
     "password": "Hasło",
     "loginButton": "Zaloguj się",
-    "logout": "Wyloguj się",
-    "errors": {
-      "auth.invalid_credentials": "Nieprawidłowy email lub hasło.",
-      "auth.invalid_token": "Twoja sesja wygasła. Zaloguj się ponownie.",
-      "auth.missing_token": "Zaloguj się, aby kontynuować.",
-      "auth.forbidden": "Nie masz uprawnień do tej operacji."
-    }
+    "logout": "Wyloguj się"
   },
   "profile": {
     "title": "Profil",
@@ -37,13 +37,7 @@
     "fullName": "Imię i nazwisko",
     "password": "Wybierz hasło",
     "acceptButton": "Utwórz konto",
-    "success": "Konto zostało utworzone. Możesz się teraz zalogować.",
-    "errors": {
-      "invitation.not_found": "Ten link z zaproszeniem jest nieprawidłowy.",
-      "invitation.expired": "To zaproszenie wygasło. Poproś managera o nowe.",
-      "invitation.already_used": "To zaproszenie zostało już wykorzystane.",
-      "invitation.email_already_registered": "Ten adres email jest już zarejestrowany."
-    }
+    "success": "Konto zostało utworzone. Możesz się teraz zalogować."
   },
   "validation": {
     "required": "To pole jest wymagane.",
@@ -51,5 +45,133 @@
   },
   "error": {
     "unknown": "Coś poszło nie tak. Spróbuj ponownie."
+  },
+  "apiErrors": {
+    "auth.invalid_credentials": "Nieprawidłowy email lub hasło.",
+    "auth.invalid_token": "Twoja sesja wygasła. Zaloguj się ponownie.",
+    "auth.missing_token": "Zaloguj się, aby kontynuować.",
+    "auth.forbidden": "Nie masz uprawnień do tej operacji.",
+    "network.unreachable": "Nie można połączyć się z serwerem. Sprawdź połączenie i spróbuj ponownie.",
+    "invitation.not_found": "Ten link z zaproszeniem jest nieprawidłowy.",
+    "invitation.expired": "To zaproszenie wygasło. Poproś managera o nowe.",
+    "invitation.already_used": "To zaproszenie zostało już wykorzystane.",
+    "invitation.email_already_registered": "Ten adres email jest już zarejestrowany.",
+    "user.not_found": "Nie znaleziono tego użytkownika.",
+    "validation.error": "Sprawdź wprowadzone dane i spróbuj ponownie.",
+    "period.not_found": "Nie znaleziono tego okresu grafiku.",
+    "period.already_exists": "Okres dla tego roku i miesiąca już istnieje.",
+    "period.illegal_transition": "Ta zmiana statusu nie jest teraz dozwolona.",
+    "shift_slot.not_found": "Nie znaleziono tej zmiany.",
+    "shift_slot.invalid_staff_levels": "Minimalna, wymagana i maksymalna liczba osób musi spełniać: min ≤ wymagane ≤ max.",
+    "availability.hard_rules_failed": "Niektóre wymagane zasady nie są jeszcze spełnione — zobacz listę powyżej.",
+    "availability.invalid_shift_slot": "Ta zmiana nie należy do tego okresu.",
+    "availability.period_not_editable": "Tego okresu nie można teraz edytować.",
+    "availability.reopen_requires_locked_period": "Tylko zablokowany okres można ponownie otworzyć dla pracownika."
+  },
+  "weekdaysShort": {
+    "MON": "Pon",
+    "TUE": "Wt",
+    "WED": "Śr",
+    "THU": "Czw",
+    "FRI": "Pt",
+    "SAT": "Sob",
+    "SUN": "Nd"
+  },
+  "weekdaysFull": {
+    "MON": "Poniedziałek",
+    "TUE": "Wtorek",
+    "WED": "Środa",
+    "THU": "Czwartek",
+    "FRI": "Piątek",
+    "SAT": "Sobota",
+    "SUN": "Niedziela"
+  },
+  "rules": {
+    "MIN_AVAILABILITY_COUNT": "{{actual}}/{{required}} zadeklarowanych zmian",
+    "MIN_AVAILABILITY_WEEKEND": "{{actual}}/{{required}} zmian weekendowych",
+    "MIN_AVAILABILITY_IN_SET": "{{weekday}} {{shift}}: {{actual}}/{{required}}"
+  },
+  "availability": {
+    "title": "Moja dostępność",
+    "periodLabel": "Okres",
+    "deadline": "Termin: {{date}}",
+    "deadlineNone": "Nie ustawiono terminu.",
+    "countdownDays": "Pozostało dni: {{count}}",
+    "countdownHours": "Pozostało godzin: {{count}}",
+    "countdownPassed": "Termin minął",
+    "noPeriods": "Nie ma jeszcze żadnych okresów grafiku. Poproś managera o utworzenie jednego.",
+    "readOnlyDraft": "Ten okres nie został jeszcze otwarty do zbierania dostępności.",
+    "readOnlyLocked": "Termin minął i dostępność jest zablokowana. Poproś managera o ponowne otwarcie, jeśli musisz coś zmienić.",
+    "readOnlyGenerated": "Grafik dla tego okresu został wygenerowany — dostępności nie można już edytować.",
+    "readOnlyPublished": "Grafik został opublikowany — dostępności nie można już edytować.",
+    "reopenedNotice": "Manager ponownie otworzył ten okres dla Ciebie — możesz znów wprowadzać zmiany.",
+    "bulkAllMornings": "Wszystkie poranki",
+    "bulkAllWeekdayEvenings": "Wszystkie wieczory w dni robocze",
+    "bulkAllWeekends": "Wszystkie weekendy",
+    "bulkClearAll": "Wyczyść wszystko",
+    "bulkCopyLastMonth": "Skopiuj z zeszłego miesiąca",
+    "bulkConfirmClear": "Wyczyścić całą Twoją dostępność na ten miesiąc?",
+    "saveStatusSaving": "Zapisywanie…",
+    "saveStatusSaved": "Zapisano",
+    "saveStatusError": "Zapis nie powiódł się.",
+    "saveStatusErrorFinal": "Zapis nie powiódł się. Sprawdź połączenie i spróbuj ponownie.",
+    "retryNow": "Spróbuj ponownie",
+    "requirementsTitle": "Wymagania",
+    "requirementsAllMet": "Wszystkie wymagania spełnione.",
+    "submitButton": "Wyślij dostępność",
+    "submitDisabledHint": "Uzupełnij powyższe wymagania, aby móc wysłać.",
+    "submitSuccess": "Dostępność wysłana!",
+    "submissionStatus": {
+      "NOT_STARTED": "Nierozpoczęte",
+      "DRAFT": "Wersja robocza — jeszcze niewysłana",
+      "SUBMITTED": "Wysłane"
+    },
+    "closedDay": "Zamknięte",
+    "chipState": {
+      "UNAVAILABLE": "Niedostępny",
+      "AVAILABLE": "Dostępny",
+      "PREFERRED": "Preferowany"
+    }
+  },
+  "manager": {
+    "periodsTitle": "Okresy grafiku",
+    "createPeriod": "Utwórz nowy okres",
+    "year": "Rok",
+    "month": "Miesiąc",
+    "deadlineOptional": "Termin zgłaszania dostępności (opcjonalnie)",
+    "createButton": "Utwórz okres",
+    "stateLabel": {
+      "DRAFT": "Szkic",
+      "COLLECTING": "Zbieranie dostępności",
+      "LOCKED": "Zablokowany",
+      "GENERATED": "Wygenerowany",
+      "PUBLISHED": "Opublikowany"
+    },
+    "transition": {
+      "openCollecting": "Otwórz zbieranie dostępności",
+      "lock": "Zablokuj dostępność",
+      "generate": "Oznacz grafik jako wygenerowany",
+      "publish": "Opublikuj grafik"
+    },
+    "periodFinal": "Ten okres osiągnął stan końcowy.",
+    "confirmTransition": "Czy na pewno? Akcji \"{{action}}\" nie można cofnąć.",
+    "trackerTitle": "Śledzenie zgłoszeń",
+    "trackerCounts": "{{submitted}} wysłano · {{draft}} wersja robocza · {{notStarted}} nierozpoczęte",
+    "columnName": "Imię i nazwisko",
+    "columnStatus": "Status",
+    "columnSubmittedAt": "Wysłano",
+    "columnActions": "Akcje",
+    "reopenButton": "Otwórz ponownie dla tego pracownika",
+    "revokeReopenButton": "Cofnij ponowne otwarcie",
+    "reopenedBadge": "ponownie otwarte",
+    "slotsTitle": "Obsada dzienna",
+    "slotDate": "Data",
+    "slotShift": "Zmiana",
+    "slotMin": "Min",
+    "slotRequired": "Wymagane",
+    "slotMax": "Max",
+    "slotClosed": "Zamknięte",
+    "slotNote": "Notatka",
+    "daysRemaining": "Dni do terminu: {{count}}"
   }
 }

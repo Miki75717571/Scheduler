@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
-import { apiClient } from "../api/client";
+import { ApiError, apiClient } from "../api/client";
 import type { User } from "../api/types";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -20,6 +20,7 @@ export function ProfilePage() {
   const { t } = useTranslation();
   const { user, refreshUser } = useAuth();
   const [saved, setSaved] = useState(false);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
   const {
     register,
@@ -40,14 +41,22 @@ export function ProfilePage() {
 
   const onSubmit = async (values: ProfileForm) => {
     setSaved(false);
-    await apiClient.patch<User>("/users/me", {
-      full_name: values.full_name,
-      phone: values.phone || null,
-      locale: values.locale,
-      password: values.password || undefined,
-    });
-    await refreshUser();
-    setSaved(true);
+    setErrorKey(null);
+    try {
+      // Sent as-is, blank or not: the backend treats a blank phone as
+      // "clear it" and a blank password as "leave it unchanged" - see
+      // backend/app/schemas/user.py.
+      await apiClient.patch<User>("/users/me", {
+        full_name: values.full_name,
+        phone: values.phone,
+        locale: values.locale,
+        password: values.password,
+      });
+      await refreshUser();
+      setSaved(true);
+    } catch (error) {
+      setErrorKey(error instanceof ApiError ? error.messageKey : "error.unknown");
+    }
   };
 
   return (
@@ -82,6 +91,12 @@ export function ProfilePage() {
       </div>
 
       {saved && <p className="text-sm text-muted-foreground">{t("profile.saved")}</p>}
+
+      {errorKey && (
+        <p className="text-sm text-destructive">
+          {t(`apiErrors.${errorKey}`, { defaultValue: t("error.unknown") })}
+        </p>
+      )}
 
       <Button type="submit" disabled={isSubmitting}>
         {t("common.save")}

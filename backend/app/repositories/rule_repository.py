@@ -31,6 +31,18 @@ class RuleRepository:
         await self._db.flush()
         return rule
 
+    async def list_active_by_phase(self, phase: RulePhase) -> list[Rule]:
+        """All active rules for a phase, unfiltered by scope - lets a caller
+        that needs to evaluate many users at once (schedule_service.py) do it
+        with one query instead of one `list_applicable` query per user.
+        """
+        result = await self._db.execute(
+            select(Rule).where(
+                Rule.is_active.is_(True), (Rule.phase == phase) | (Rule.phase == RulePhase.BOTH)
+            )
+        )
+        return list(result.scalars())
+
     async def list_applicable(
         self,
         *,

@@ -140,3 +140,48 @@ ADMIN_BOOTSTRAP_PASSWORD=<a real password>
 7. Confirm authorization boundaries: as the employee, `GET /api/v1/users` and
    `POST /api/v1/invitations` both return 403. `backend/tests/api/test_users.py` and
    `test_invitations.py` assert this for every role combination.
+
+## Phase 3 (backend) — what to click through
+
+Assignments, the schedule validator, and the publish flow — no calendar UI yet, that's a
+follow-up. Everything below is exercised through `/docs` (Swagger UI) against the demo data
+`app.seed` creates.
+
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then open
+   http://localhost:8000/docs and click **Authorize** with the admin login the terminal printed
+   (or `POST /api/v1/auth/login` and paste the `access_token` in as a Bearer token).
+2. `GET /api/v1/periods` — find the period in state `GENERATED` for the current month (the
+   `COLLECTING` one is next month's availability-collection demo from Phase 2). Copy its `id`.
+3. `GET /api/v1/periods/{period_id}/violations` — the seeded month deliberately contains:
+   - an `ERROR` with `rule_code: min_11h_rest` (an employee closes one evening then opens the
+     next morning — 8 hours of rest against an 11-hour rule),
+   - a `WARNING` with `rule_code: min_5_shifts_per_month` and `"required": 10` (one employee has
+     a personal `contract_min_shifts` override stricter than the global default — their 6 shifts
+     clear the global rule but not their own contract),
+   - several `ERROR`s with `message_key: schedule.understaffed_below_minimum` (most of the month
+     is intentionally left unassigned — this is a partially-scheduled month, not a finished one),
+   - `WARNING`s with `message_key: schedule.assigned_despite_unavailable` (every seeded assignment
+     was made without a matching availability declaration — allowed, just flagged).
+4. `GET /api/v1/periods/{period_id}/assignments` — the handful of manual assignments behind those
+   violations, each with `source: MANUAL`, `is_locked`, `created_by_user_id`.
+5. Pick any `shift_slot_id` from `GET /api/v1/periods/{period_id}/slots` and call
+   `GET /api/v1/periods/{period_id}/slots/{shift_slot_id}/available-employees` — employees who
+   declared `AVAILABLE`/`PREFERRED` for it, already excluding anyone a `HARD` schedule rule would
+   make impossible to add (e.g. already working another shift that day).
+6. `POST /api/v1/periods/{period_id}/assignments` with a `shift_slot_id` + `user_id` — the
+   response includes the freshly recomputed `violations` list, so a manager UI never needs a
+   second round-trip after a change. `PATCH .../assignments/{id}/move`,
+   `PATCH .../assignments/{id}/lock`, `DELETE .../assignments/{id}`, and
+   `POST .../assignments/bulk` (several ops in one call) all work the same way.
+7. `PATCH /api/v1/periods/{period_id}/state` with `{"state": "PUBLISHED"}` — refused with
+   `409 period.publish_blocked_by_errors` while the `ERROR`-severity violations above exist.
+   Retry with `{"state": "PUBLISHED", "override_violations": true}` to publish anyway.
+8. `GET /api/v1/periods/{period_id}/audit-log` — every mutation above, plus the
+   `period.publish_override` entry from the previous step, each with actor/before/after/when.
+9. Log in as an employee (`employee01@example.com` / `password123`, see `app/seed.py`) and confirm
+   `GET /api/v1/periods/{period_id}/assignments` returns 403 before publish, and — once
+   published — only that employee's own shifts plus colleagues sharing them (no one else's, no
+   availability, no scores); `GET /api/v1/periods/{period_id}/violations` and `.../audit-log` stay
+   403 for that token regardless of publish state.
+   `backend/tests/api/test_assignments.py` and `tests/unit/test_schedule_validator.py` assert all
+   of the above.

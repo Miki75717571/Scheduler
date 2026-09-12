@@ -81,12 +81,23 @@ async def test_legal_state_transitions_succeed_in_order(
         await client.post("/api/v1/periods", json={"year": 2027, "month": 3}, headers=headers)
     ).json()["id"]
 
-    for target in ("COLLECTING", "LOCKED", "GENERATED", "PUBLISHED"):
+    for target in ("COLLECTING", "LOCKED", "GENERATED"):
         response = await client.patch(
             f"/api/v1/periods/{period_id}/state", json={"state": target}, headers=headers
         )
         assert response.status_code == 200, response.text
         assert response.json()["state"] == target
+
+    # No assignments exist yet, so every slot is understaffed (ERROR-severity)
+    # - publishing an empty schedule requires the explicit override (see
+    # tests/api/test_assignments.py for the full publish-gating behaviour).
+    response = await client.patch(
+        f"/api/v1/periods/{period_id}/state",
+        json={"state": "PUBLISHED", "override_violations": True},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "PUBLISHED"
 
     published = (await client.get(f"/api/v1/periods/{period_id}", headers=headers)).json()
     assert published["published_at"] is not None
