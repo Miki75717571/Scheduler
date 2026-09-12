@@ -18,6 +18,7 @@ from app.api.v1 import (
     invitations,
     periods,
     rules,
+    scores,
     shift_types,
     users,
 )
@@ -87,3 +88,4 @@ app.include_router(periods.router, prefix=API_V1_PREFIX)
 app.include_router(availability.router, prefix=API_V1_PREFIX)
 app.include_router(rules.router, prefix=API_V1_PREFIX)
 app.include_router(assignments.router, prefix=API_V1_PREFIX)
+app.include_router(scores.router, prefix=API_V1_PREFIX)

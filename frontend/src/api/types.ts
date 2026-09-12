@@ -143,3 +143,45 @@ export interface AvailableEmployee {
   full_name: string;
   status: AvailabilityStatus;
 }
+
+export interface ScoreCriterion {
+  id: string;
+  code: string;
+  name_pl: string;
+  name_en: string;
+  description: string | null;
+  weight: string; // exact Decimal, serialized as a string - never parse with Number() for comparisons
+  scale_min: number;
+  scale_max: number;
+  is_active: boolean;
+}
+
+export interface ScoreEntry {
+  criterion_id: string;
+  value: number;
+  effective_from: string;
+  set_by_user_id: string;
+  note: string | null;
+}
+
+export interface ScoreGridRow {
+  user_id: string;
+  full_name: string;
+  entries: ScoreEntry[];
+  composite: number | null;
+}
+
+export interface ScoreHistoryEntry {
+  id: string;
+  criterion_id: string;
+  criterion_code: string;
+  criterion_name_pl: string;
+  criterion_name_en: string;
+  value: number;
+  previous_value: number | null;
+  effective_from: string;
+  set_by_user_id: string;
+  set_by_full_name: string;
+  note: string | null;
+  created_at: string;
+}

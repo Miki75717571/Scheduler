@@ -11,6 +11,8 @@
     "availability": "Moja dostępność",
     "schedule": "Mój grafik",
     "manager": "Manager",
+    "scores": "Oceny",
+    "criteria": "Kryteria",
     "profile": "Profil"
   },
   "health": {
@@ -76,7 +78,13 @@
     "assignment.slot_closed": "Ta zmiana jest zamknięta.",
     "assignment.invalid_bulk_operation": "Ta operacja zbiorcza była nieprawidłowa.",
     "assignment.period_not_published": "Ten grafik nie został jeszcze opublikowany.",
-    "period.publish_blocked_by_errors": "Grafik zawiera nierozwiązane błędy — rozwiąż je lub potwierdź publikację mimo nich."
+    "period.publish_blocked_by_errors": "Grafik zawiera nierozwiązane błędy — rozwiąż je lub potwierdź publikację mimo nich.",
+    "score_criterion.not_found": "Nie znaleziono tego kryterium.",
+    "score_criterion.code_already_exists": "Kryterium o tym kodzie już istnieje.",
+    "score_criterion.weights_must_sum_to_one": "Wagi aktywnych kryteriów muszą sumować się dokładnie do 1.0 (obecnie {{total}}).",
+    "score.user_not_found": "Nie znaleziono tego pracownika.",
+    "score.criterion_not_found": "Nie znaleziono tego kryterium.",
+    "score.criterion_inactive": "To kryterium jest nieaktywne i nie można go oceniać."
   },
   "weekdaysShort": {
     "MON": "Pon",
@@ -246,5 +254,52 @@
     "changedNotice": "Ten grafik zmienił się po publikacji — sprawdź zmiany poniżej.",
     "changedBadge": "Zmieniono po publikacji",
     "noShifts": "Nie zaplanowano dla Ciebie żadnych zmian w tym miesiącu."
+  },
+  "scores": {
+    "title": "Oceny pracowników",
+    "asOfLabel": "Stan na",
+    "columnEmployee": "Pracownik",
+    "columnComposite": "Suma",
+    "noEmployees": "Brak aktywnych pracowników do oceny.",
+    "noCriteria": "Brak aktywnych kryteriów — najpierw skonfiguruj je na ekranie Kryteria.",
+    "notRated": "Jeszcze nieocenione",
+    "compositeNotRated": "—",
+    "cellLabel": "{{criterion}} dla {{employee}}",
+    "savingIndicator": "Zapisywanie…",
+    "savedIndicator": "Zapisano",
+    "saveErrorIndicator": "Zapis nie powiódł się",
+    "historyButton": "Historia",
+    "historyTitle": "Historia ocen — {{name}}",
+    "historyEmpty": "Brak zarejestrowanych ocen.",
+    "historyFirstRating": "Pierwsza ocena: {{value}}",
+    "historyChange": "{{previous}} → {{value}}",
+    "historySetBy": "{{name}}, {{date}}",
+    "historyNote": "Notatka: {{note}}",
+    "historyClose": "Zamknij",
+    "noteLabel": "Notatka (opcjonalnie)",
+    "noteSave": "Zapisz notatkę"
+  },
+  "criteria": {
+    "title": "Kryteria oceny",
+    "columnCode": "Kod",
+    "columnNamePl": "Nazwa (PL)",
+    "columnNameEn": "Nazwa (EN)",
+    "columnDescription": "Opis",
+    "columnWeight": "Waga",
+    "columnActive": "Aktywne",
+    "columnScale": "Skala",
+    "columnActions": "Akcje",
+    "addButton": "Dodaj kryterium",
+    "newCode": "KOD",
+    "newNamePl": "Nazwa",
+    "newNameEn": "Name",
+    "runningTotal": "Suma wag aktywnych kryteriów: {{total}}",
+    "runningTotalValid": "sumuje się do 1.0 ✓",
+    "runningTotalInvalid": "musi sumować się dokładnie do 1.0",
+    "saveWeightsButton": "Zapisz wagi",
+    "weightsSaved": "Wagi zapisane.",
+    "deactivateButton": "Dezaktywuj",
+    "deactivateConfirm": "Dezaktywować \"{{name}}\"? Wagi aktywnych kryteriów nadal muszą sumować się do 1.0.",
+    "createSuccess": "Utworzono kryterium (nieaktywne — ustaw wagę i aktywuj je poniżej)."
   }
 }

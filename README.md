@@ -225,3 +225,45 @@ employee view name colleagues on a shared shift without a roster-wide endpoint.
     `/manager/periods/{id}/schedule` redirects to `/availability`.
 
 Component tests: `frontend/src/features/schedule/{colorLogic,AssignPickerDialog,ViolationsPanel}.test.tsx`.
+
+## Phase 4 — what to click through
+
+Score criteria, versioned employee scores, and the manager scoring grid — data for the Phase 5
+solver, no automatic assignment yet. `app.seed` creates four default criteria (customer service,
+reliability, speed, seniority — weights `0.35/0.35/0.15/0.15`, all editable/replaceable by an
+admin) and some demo scores; a few employees are deliberately left unscored on one criterion so
+the grid's "not yet rated" state has something to show.
+
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+   from `backend/` if you haven't already.
+2. Log in as the bootstrap admin and open **Criteria** (`/admin/criteria`, admin-only nav link) —
+   the four seeded criteria, each with its own rename/description save button, a weight input, and
+   an **Active** checkbox. The **Active weights total** line updates live as you type and turns
+   green once it hits exactly `1.0000`.
+3. Try changing one weight without adjusting any other, then **Save weights** — rejected with
+   `422 score_criterion.weights_must_sum_to_one` and the exact current total in the message. Adjust
+   a second criterion's weight in the same table so they sum to `1.0` again and save — succeeds.
+4. Add a new criterion (code/name only) — it's created **inactive** at weight 0 (an active weight
+   change needs a coordinated multi-row save, so a brand-new criterion can never land on its own
+   and break the sum). Give it a weight, uncheck an existing criterion or rebalance the others so
+   the total is `1.0`, and save weights again to bring it live.
+5. Log in as a manager (or stay admin) and open **Scores** (`/manager/scores`) — employees as rows,
+   active criteria as columns, a composite column. Click a 1–5 button in any cell: it saves
+   immediately (no separate "save" step) and shows a brief "Saved" indicator under the cell. A
+   criterion with no value yet shows "Not yet rated"; an employee missing any active criterion
+   shows `—` for composite rather than a misleading partial score.
+6. Click **History** on any employee — a timeline of every score ever set for them, each entry
+   showing the criterion, the value it replaced (or "First rating" if none), who set it, when, and
+   any note. Score twice in a row on the same criterion via the grid and reopen History to see both
+   entries — nothing is ever overwritten, only inserted (`app/models/employee_score.py`).
+7. **Privacy — the most important part.** Log in as `employee01@example.com` / `password123` and
+   confirm: `GET /api/v1/scores/grid`, `GET /api/v1/users/{any_id}/scores/history`, and
+   `POST /api/v1/users/{any_id}/scores` all return `403`, including for the employee's own id.
+   `GET /api/v1/users/me` and `GET /api/v1/users` (as admin) never contain a `score` field anywhere
+   in the payload. There's also no **Scores**/**Criteria** link in the nav for that account, and
+   `/manager/scores` / `/admin/criteria` redirect away if typed directly.
+   `backend/tests/api/test_scores.py` asserts all of the above (weight-sum validation on both
+   create/update/deactivate/bulk paths, versioning, and the full privacy boundary); the composite
+   formula and weight-sum invariant also have standalone unit tests in
+   `backend/tests/unit/test_score_service.py`, and the grid component in
+   `frontend/src/features/scores/ScoringGrid.test.tsx`.

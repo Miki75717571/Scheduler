@@ -11,6 +11,8 @@
     "availability": "My availability",
     "schedule": "My schedule",
     "manager": "Manager",
+    "scores": "Scores",
+    "criteria": "Criteria",
     "profile": "Profile"
   },
   "health": {
@@ -76,7 +78,13 @@
     "assignment.slot_closed": "This shift is closed.",
     "assignment.invalid_bulk_operation": "That bulk operation was invalid.",
     "assignment.period_not_published": "This schedule hasn't been published yet.",
-    "period.publish_blocked_by_errors": "The schedule has unresolved errors — resolve them or confirm to override."
+    "period.publish_blocked_by_errors": "The schedule has unresolved errors — resolve them or confirm to override.",
+    "score_criterion.not_found": "That criterion could not be found.",
+    "score_criterion.code_already_exists": "A criterion with that code already exists.",
+    "score_criterion.weights_must_sum_to_one": "Active criteria weights must add up to exactly 1.0 (currently {{total}}).",
+    "score.user_not_found": "That employee could not be found.",
+    "score.criterion_not_found": "That criterion could not be found.",
+    "score.criterion_inactive": "That criterion is inactive and can't be scored."
   },
   "weekdaysShort": {
     "MON": "Mon",
@@ -246,5 +254,52 @@
     "changedNotice": "This schedule changed after it was published — check for updates below.",
     "changedBadge": "Changed since publish",
     "noShifts": "No shifts scheduled for you this month."
+  },
+  "scores": {
+    "title": "Employee scores",
+    "asOfLabel": "As of",
+    "columnEmployee": "Employee",
+    "columnComposite": "Composite",
+    "noEmployees": "No active employees to score yet.",
+    "noCriteria": "No active criteria yet — set them up on the Criteria screen first.",
+    "notRated": "Not yet rated",
+    "compositeNotRated": "—",
+    "cellLabel": "{{criterion}} for {{employee}}",
+    "savingIndicator": "Saving…",
+    "savedIndicator": "Saved",
+    "saveErrorIndicator": "Save failed",
+    "historyButton": "History",
+    "historyTitle": "Score history — {{name}}",
+    "historyEmpty": "No scores recorded yet.",
+    "historyFirstRating": "First rating: {{value}}",
+    "historyChange": "{{previous}} → {{value}}",
+    "historySetBy": "{{name}}, {{date}}",
+    "historyNote": "Note: {{note}}",
+    "historyClose": "Close",
+    "noteLabel": "Note (optional)",
+    "noteSave": "Save note"
+  },
+  "criteria": {
+    "title": "Score criteria",
+    "columnCode": "Code",
+    "columnNamePl": "Name (PL)",
+    "columnNameEn": "Name (EN)",
+    "columnDescription": "Description",
+    "columnWeight": "Weight",
+    "columnActive": "Active",
+    "columnScale": "Scale",
+    "columnActions": "Actions",
+    "addButton": "Add criterion",
+    "newCode": "CODE",
+    "newNamePl": "Nazwa",
+    "newNameEn": "Name",
+    "runningTotal": "Active weights total: {{total}}",
+    "runningTotalValid": "sums to 1.0 ✓",
+    "runningTotalInvalid": "must sum to exactly 1.0",
+    "saveWeightsButton": "Save weights",
+    "weightsSaved": "Weights saved.",
+    "deactivateButton": "Deactivate",
+    "deactivateConfirm": "Deactivate \"{{name}}\"? Active weights must still sum to 1.0 afterwards.",
+    "createSuccess": "Criterion created (inactive — set its weight and activate it below)."
   }
 }

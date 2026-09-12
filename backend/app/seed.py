@@ -19,6 +19,12 @@ handful of manual assignments - deliberately containing one of each
 violation CLAUDE.md's Phase 3 brief calls out: an understaffed day (ERROR),
 a rest-period violation (ERROR), and one person below their (overridden)
 contract minimum (WARNING). See _seed_demo_schedule below.
+
+Phase 4 adds: the four default ScoreCriterion rows (ARCHITECTURE.md ss3.4)
+and one EmployeeScore per criterion for most employees, so the manager
+scoring grid isn't empty on first run. A few employees are deliberately left
+unscored on at least one criterion, so the grid's "not yet rated" state has
+something to show too.
 """
 
 import asyncio
@@ -26,6 +32,7 @@ import calendar
 import random
 import uuid
 from datetime import date, time, timedelta
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,24 +44,34 @@ from app.models.assignment import AssignmentSource
 from app.models.availability import AvailabilityStatus
 from app.models.rule import RulePhase, RuleScope, RuleSeverity, RuleType
 from app.models.schedule_period import PeriodState
+from app.models.score_criterion import ScoreCriterion
 from app.models.shift_slot import ShiftSlot
 from app.models.shift_type import ShiftType
 from app.models.user import EmploymentType, Role, User
 from app.repositories.assignment_repository import AssignmentRepository
+from app.repositories.employee_score_repository import EmployeeScoreRepository
 from app.repositories.period_repository import PeriodRepository
 from app.repositories.rule_repository import RuleRepository
+from app.repositories.score_criterion_repository import ScoreCriterionRepository
 from app.repositories.shift_type_repository import ShiftTypeRepository
 from app.repositories.user_repository import UserRepository
 from app.rules.weekdays import ALL_WEEKDAYS_MASK, WEEKEND_MASK, Weekday, weekday_of
 from app.schemas.assignment import AssignmentCreate
 from app.schemas.availability import AvailabilityEntryWrite
+from app.schemas.employee_score import EmployeeScoreCreate
 from app.schemas.period import PeriodCreate
 from app.schemas.rule import RuleCreate
+from app.schemas.score_criterion import (
+    ScoreCriterionCreate,
+    ScoreWeightsUpdate,
+    ScoreWeightsUpdateItem,
+)
 from app.schemas.shift_type import ShiftTypeCreate
 from app.services.availability_service import AvailabilityService
 from app.services.period_service import PeriodService
 from app.services.rule_service import RuleService
 from app.services.schedule_service import ScheduleService
+from app.services.score_service import ScoreService
 from app.services.shift_type_service import ShiftTypeService
 
 _SHIFT_TYPE_DEFS = [
@@ -183,6 +200,45 @@ _RULE_DEFS = [
     ),
 ]
 
+# Phase 4 (ARCHITECTURE.md ss3.4) defaults - a starting point the owner said
+# they will change, so nothing downstream (app/services/score_service.py,
+# the manager scoring grid) may special-case these codes. Weights sum to
+# exactly 1.0, as required for a composite to be computable at all.
+_SCORE_CRITERION_DEFS = [
+    ScoreCriterionCreate(
+        code="CUSTOMER_SERVICE",
+        name_pl="Obsluga klienta",
+        name_en="Customer service",
+        description="Warmth and helpfulness with customers.",
+        weight=Decimal("0.35"),
+        is_active=True,
+    ),
+    ScoreCriterionCreate(
+        code="RELIABILITY",
+        name_pl="Niezawodnosc",
+        name_en="Reliability",
+        description="Shows up on time, rarely calls in sick or swaps last-minute.",
+        weight=Decimal("0.35"),
+        is_active=True,
+    ),
+    ScoreCriterionCreate(
+        code="SPEED",
+        name_pl="Szybkosc",
+        name_en="Speed",
+        description="Keeps up during rushes without cutting corners.",
+        weight=Decimal("0.15"),
+        is_active=True,
+    ),
+    ScoreCriterionCreate(
+        code="SENIORITY",
+        name_pl="Staz pracy",
+        name_en="Seniority",
+        description="Experience and tenure at the cafeteria.",
+        weight=Decimal("0.15"),
+        is_active=True,
+    ),
+]
+
 # One person deliberately kept below their own contract minimum (which
 # overrides the min_5_shifts_per_month global default above) rather than the
 # global one - proves the per-user override path, not just the rule itself.
@@ -271,6 +327,73 @@ async def _seed_rules(db: AsyncSession) -> None:
             continue
         rule = await service.create(payload)
         print(f"Created rule: {rule.code}")
+
+
+async def _seed_score_criteria(db: AsyncSession) -> None:
+    """Creates each default criterion inactive at weight 0 first, then
+    activates all four together at their real weights in one bulk call -
+    creating them active one at a time would violate the "active weights sum
+    to 1.0" invariant at every step but the last (see
+    app/schemas/score_criterion.py's ScoreWeightsUpdate docstring).
+    """
+    repo = ScoreCriterionRepository(db)
+    service = ScoreService(db)
+
+    pending: list[tuple[ScoreCriterion, Decimal]] = []
+    any_created = False
+    for payload in _SCORE_CRITERION_DEFS:
+        existing = await repo.get_by_code(payload.code)
+        if existing is not None:
+            pending.append((existing, payload.weight))
+            continue
+        draft = payload.model_copy(update={"weight": Decimal("0"), "is_active": False})
+        criterion = await service.create_criterion(draft)
+        pending.append((criterion, payload.weight))
+        any_created = True
+        print(f"Created score criterion: {criterion.code}")
+
+    if any_created:
+        await service.update_weights(
+            ScoreWeightsUpdate(
+                items=[
+                    ScoreWeightsUpdateItem(id=criterion.id, weight=weight, is_active=True)
+                    for criterion, weight in pending
+                ]
+            )
+        )
+
+
+# Every third employee is left unscored on SPEED, so the grid's "not yet
+# rated" cell and the None composite have something to show.
+_SCORE_VALUE_BY_INDEX_MOD = {0: 5, 1: 4, 2: 3, 3: 2}
+
+
+async def _seed_demo_scores(db: AsyncSession, employees: list[User], *, actor: User) -> None:
+    criteria = await ScoreCriterionRepository(db).list_all(active_only=True)
+    if not criteria:
+        return
+    score_service = ScoreService(db)
+
+    existing = await EmployeeScoreRepository(db).list_effective_rows(
+        {e.id for e in employees}, as_of=date.today()
+    )
+    if existing:
+        print("Demo scores already seeded; skipping.")
+        return
+
+    scored_count = 0
+    for index, employee in enumerate(employees):
+        for criterion_index, criterion in enumerate(criteria):
+            if criterion.code == "SPEED" and index % 3 == 0:
+                continue  # deliberately left unrated
+            value = _SCORE_VALUE_BY_INDEX_MOD[(index + criterion_index) % 4]
+            await score_service.set_score(
+                user_id=employee.id,
+                payload=EmployeeScoreCreate(criterion_id=criterion.id, value=value),
+                actor=actor,
+            )
+        scored_count += 1
+    print(f"Seeded demo scores for {scored_count} employees across {len(criteria)} criteria.")
 
 
 async def _seed_employees(db: AsyncSession) -> list[User]:
@@ -508,9 +631,11 @@ async def run() -> None:
         admin = await _seed_admin(db)
         await _seed_shift_types(db)
         await _seed_rules(db)
+        await _seed_score_criteria(db)
         employees = await _seed_employees(db)
         await _seed_demo_period(db, employees, actor=admin)
         await _seed_demo_schedule(db, employees, actor=admin)
+        await _seed_demo_scores(db, employees, actor=admin)
 
 
 if __name__ == "__main__":

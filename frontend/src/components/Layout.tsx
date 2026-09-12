@@ -17,6 +17,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const location = useLocation();
   const isManager = user?.role === "MANAGER" || user?.role === "ADMIN";
+  const isAdmin = user?.role === "ADMIN";
   const wide = WIDE_ROUTE.test(location.pathname);
 
   return (
@@ -34,6 +35,16 @@ export function Layout({ children }: { children: ReactNode }) {
             {isManager && (
               <Link to="/manager/periods" className="hover:text-foreground">
                 {t("nav.manager")}
+              </Link>
+            )}
+            {isManager && (
+              <Link to="/manager/scores" className="hover:text-foreground">
+                {t("nav.scores")}
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/admin/criteria" className="hover:text-foreground">
+                {t("nav.criteria")}
               </Link>
             )}
             <Link to="/profile" className="hover:text-foreground">

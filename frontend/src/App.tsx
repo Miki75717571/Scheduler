@@ -1,21 +1,28 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { AdminRoute } from "./components/AdminRoute";
 import { Layout } from "./components/Layout";
 import { ManagerRoute } from "./components/ManagerRoute";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider, useAuth } from "./lib/auth-context";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
+import { AdminCriteriaPage } from "./pages/AdminCriteriaPage";
 import { AvailabilityPage } from "./pages/AvailabilityPage";
 import { EmployeeSchedulePage } from "./pages/EmployeeSchedulePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ManagerPeriodDetailPage } from "./pages/ManagerPeriodDetailPage";
 import { ManagerPeriodsPage } from "./pages/ManagerPeriodsPage";
 import { ManagerSchedulePage } from "./pages/ManagerSchedulePage";
+import { ManagerScoresPage } from "./pages/ManagerScoresPage";
 import { ProfilePage } from "./pages/ProfilePage";
 
 function AppRoutes() {
   const { user } = useAuth();
-  const homePath = !user ? "/login" : user.role === "EMPLOYEE" ? "/availability" : "/manager/periods";
+  const homePath = !user
+    ? "/login"
+    : user.role === "EMPLOYEE"
+      ? "/availability"
+      : "/manager/periods";
 
   return (
     <Routes>
@@ -67,6 +74,22 @@ function AppRoutes() {
           <ManagerRoute>
             <ManagerSchedulePage />
           </ManagerRoute>
+        }
+      />
+      <Route
+        path="/manager/scores"
+        element={
+          <ManagerRoute>
+            <ManagerScoresPage />
+          </ManagerRoute>
+        }
+      />
+      <Route
+        path="/admin/criteria"
+        element={
+          <AdminRoute>
+            <AdminCriteriaPage />
+          </AdminRoute>
         }
       />
       <Route path="*" element={<Navigate to={homePath} replace />} />
