@@ -5,8 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import CurrentUser, require_role
 from app.db.session import get_db
+from app.models.assignment import Assignment
 from app.models.schedule_period import SchedulePeriod
 from app.models.user import Role
+from app.repositories.user_repository import UserRepository
 from app.rules.types import ScheduleViolation
 from app.schemas.assignment import (
     AssignmentCreate,
@@ -47,6 +49,30 @@ def _assignment_http_error(exc: AssignmentError) -> HTTPException:
     return HTTPException(status_code, detail={"message_key": exc.message_key, "params": exc.params})
 
 
+async def _name_by_id(db: AsyncSession, assignments: list[Assignment]) -> dict[uuid.UUID, str]:
+    # Scoped to just the users appearing in these assignments - list_by_ids
+    # never exposes the full roster, so this stays safe to build even for an
+    # employee's own (shared-shift-filtered) assignment list.
+    user_ids = {a.user_id for a in assignments}
+    users = await UserRepository(db).list_by_ids(user_ids)
+    return {u.id: u.full_name for u in users}
+
+
+def _to_assignment_read(a: Assignment, name_by_id: dict[uuid.UUID, str]) -> AssignmentRead:
+    return AssignmentRead(
+        id=a.id,
+        shift_slot_id=a.shift_slot_id,
+        user_id=a.user_id,
+        full_name=name_by_id.get(a.user_id, ""),
+        source=a.source,
+        is_locked=a.is_locked,
+        modified_after_publish=a.modified_after_publish,
+        created_by_user_id=a.created_by_user_id,
+        created_at=a.created_at,
+        updated_at=a.updated_at,
+    )
+
+
 def _to_violation_read(v: ScheduleViolation) -> ScheduleViolationRead:
     return ScheduleViolationRead(
         severity=v.severity,
@@ -80,7 +106,8 @@ async def list_assignments(
         )
     except AssignmentError as exc:
         raise _assignment_http_error(exc) from exc
-    return [AssignmentRead.model_validate(a) for a in assignments]
+    name_by_id = await _name_by_id(db, assignments)
+    return [_to_assignment_read(a, name_by_id) for a in assignments]
 
 
 @router.post(
@@ -102,8 +129,9 @@ async def create_assignment(
     except AssignmentError as exc:
         raise _assignment_http_error(exc) from exc
     violations = await service.compute_violations(period)
+    name_by_id = await _name_by_id(db, [assignment])
     return AssignmentMutationResult(
-        assignment=AssignmentRead.model_validate(assignment),
+        assignment=_to_assignment_read(assignment, name_by_id),
         violations=[_to_violation_read(v) for v in violations],
     )
 
@@ -152,8 +180,9 @@ async def move_assignment(
     except AssignmentError as exc:
         raise _assignment_http_error(exc) from exc
     violations = await service.compute_violations(period)
+    name_by_id = await _name_by_id(db, [assignment])
     return AssignmentMutationResult(
-        assignment=AssignmentRead.model_validate(assignment),
+        assignment=_to_assignment_read(assignment, name_by_id),
         violations=[_to_violation_read(v) for v in violations],
     )
 
@@ -178,7 +207,8 @@ async def set_assignment_lock(
         )
     except AssignmentError as exc:
         raise _assignment_http_error(exc) from exc
-    return AssignmentRead.model_validate(assignment)
+    name_by_id = await _name_by_id(db, [assignment])
+    return _to_assignment_read(assignment, name_by_id)
 
 
 @router.post(
@@ -199,8 +229,9 @@ async def bulk_assignments(
     except AssignmentError as exc:
         raise _assignment_http_error(exc) from exc
     violations = await service.compute_violations(period)
+    name_by_id = await _name_by_id(db, assignments)
     return BulkAssignmentResult(
-        assignments=[AssignmentRead.model_validate(a) for a in assignments],
+        assignments=[_to_assignment_read(a, name_by_id) for a in assignments],
         violations=[_to_violation_read(v) for v in violations],
     )
 

@@ -100,3 +100,46 @@ export interface SubmissionTrackerEntry {
   submitted_at: string | null;
   reopened_by_manager: boolean;
 }
+
+export type AssignmentSource = "AUTO" | "MANUAL";
+
+export interface Assignment {
+  id: string;
+  shift_slot_id: string;
+  user_id: string;
+  full_name: string;
+  source: AssignmentSource;
+  is_locked: boolean;
+  modified_after_publish: boolean;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export type ViolationSeverity = "ERROR" | "WARNING";
+
+export interface ScheduleViolation {
+  severity: ViolationSeverity;
+  rule_code: string;
+  rule_type: string;
+  message_key: string;
+  message_params: Record<string, unknown>;
+  shift_slot_id: string | null;
+  user_id: string | null;
+}
+
+export interface AssignmentMutationResult {
+  assignment: Assignment | null;
+  violations: ScheduleViolation[];
+}
+
+export interface BulkAssignmentResult {
+  assignments: Assignment[];
+  violations: ScheduleViolation[];
+}
+
+export interface AvailableEmployee {
+  user_id: string;
+  full_name: string;
+  status: AvailabilityStatus;
+}

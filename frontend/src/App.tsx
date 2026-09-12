@@ -6,9 +6,11 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider, useAuth } from "./lib/auth-context";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { AvailabilityPage } from "./pages/AvailabilityPage";
+import { EmployeeSchedulePage } from "./pages/EmployeeSchedulePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ManagerPeriodDetailPage } from "./pages/ManagerPeriodDetailPage";
 import { ManagerPeriodsPage } from "./pages/ManagerPeriodsPage";
+import { ManagerSchedulePage } from "./pages/ManagerSchedulePage";
 import { ProfilePage } from "./pages/ProfilePage";
 
 function AppRoutes() {
@@ -36,6 +38,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/schedule"
+        element={
+          <ProtectedRoute>
+            <EmployeeSchedulePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/manager/periods"
         element={
           <ManagerRoute>
@@ -48,6 +58,14 @@ function AppRoutes() {
         element={
           <ManagerRoute>
             <ManagerPeriodDetailPage />
+          </ManagerRoute>
+        }
+      />
+      <Route
+        path="/manager/periods/:periodId/schedule"
+        element={
+          <ManagerRoute>
+            <ManagerSchedulePage />
           </ManagerRoute>
         }
       />

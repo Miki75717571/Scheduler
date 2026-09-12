@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import type { PeriodState } from "../api/types";
 import { ApiErrorText } from "../components/ApiErrorText";
@@ -131,6 +131,12 @@ export function ManagerPeriodDetailPage() {
 
       <section className="space-y-2">
         <PeriodStateControls state={period.state} onTransition={handleTransition} />
+        <Link
+          to={`/manager/periods/${periodId}/schedule`}
+          className="inline-block text-sm text-primary underline-offset-2 hover:underline"
+        >
+          {t("manager.scheduleLink")} →
+        </Link>
       </section>
 
       <section className="space-y-2">

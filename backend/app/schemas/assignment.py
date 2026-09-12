@@ -14,6 +14,7 @@ class AssignmentRead(BaseModel):
     id: uuid.UUID
     shift_slot_id: uuid.UUID
     user_id: uuid.UUID
+    full_name: str
     source: AssignmentSource
     is_locked: bool
     modified_after_publish: bool

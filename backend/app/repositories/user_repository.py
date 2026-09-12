@@ -36,6 +36,16 @@ class UserRepository:
         result = await self._db.execute(select(User).order_by(User.full_name))
         return list(result.scalars())
 
+    async def list_by_ids(self, user_ids: set[uuid.UUID]) -> list[User]:
+        """Batch lookup scoped to specific ids - unlike `list_all`, safe to call
+        from a non-admin route (e.g. resolving colleague names on shared shifts
+        in app/api/v1/assignments.py), since it never exposes the full roster.
+        """
+        if not user_ids:
+            return []
+        result = await self._db.execute(select(User).where(User.id.in_(user_ids)))
+        return list(result.scalars())
+
     async def create(self, user: User) -> User:
         self._db.add(user)
         await self._db.flush()

@@ -23,8 +23,15 @@ export function createPeriod(payload: {
   return apiClient.post<SchedulePeriod>("/periods", payload);
 }
 
-export function updatePeriodState(periodId: string, state: PeriodState): Promise<SchedulePeriod> {
-  return apiClient.patch<SchedulePeriod>(`/periods/${periodId}/state`, { state });
+export function updatePeriodState(
+  periodId: string,
+  state: PeriodState,
+  overrideViolations = false,
+): Promise<SchedulePeriod> {
+  return apiClient.patch<SchedulePeriod>(`/periods/${periodId}/state`, {
+    state,
+    override_violations: overrideViolations,
+  });
 }
 
 export function fetchSlots(periodId: string): Promise<ShiftSlot[]> {

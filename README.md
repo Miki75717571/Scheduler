@@ -143,9 +143,9 @@ ADMIN_BOOTSTRAP_PASSWORD=<a real password>
 
 ## Phase 3 (backend) — what to click through
 
-Assignments, the schedule validator, and the publish flow — no calendar UI yet, that's a
-follow-up. Everything below is exercised through `/docs` (Swagger UI) against the demo data
-`app.seed` creates.
+Assignments, the schedule validator, and the publish flow, exercised directly through `/docs`
+(Swagger UI) against the demo data `app.seed` creates — see the next section for the calendar UI
+built on top of this API.
 
 1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then open
    http://localhost:8000/docs and click **Authorize** with the admin login the terminal printed
@@ -185,3 +185,43 @@ follow-up. Everything below is exercised through `/docs` (Swagger UI) against th
    403 for that token regardless of publish state.
    `backend/tests/api/test_assignments.py` and `tests/unit/test_schedule_validator.py` assert all
    of the above.
+
+## Phase 3 (frontend) — what to click through
+
+The manager schedule calendar and the employee schedule view, on top of the API above.
+`AssignmentRead` now also carries `full_name` (resolved server-side, scoped to just the users in
+the response — see `app/repositories/user_repository.py`'s `list_by_ids`), which is what lets the
+employee view name colleagues on a shared shift without a roster-wide endpoint.
+
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+   from `backend/` if you haven't already — it seeds a `GENERATED` period for the current month
+   with the three violation scenarios described above.
+2. Log in as the manager/admin the terminal printed, go to **Manager** → the `GENERATED` period →
+   **Open schedule calendar** (or go straight to `/manager/periods/{id}/schedule`).
+3. Click any **+ Add** in an empty (red) lane — the picker opens. With no availability seeded for
+   this month, everyone falls into the collapsed **Not marked available** section with its warning
+   banner; expand it and pick someone anyway (the "exception" path). The chip appears immediately,
+   the lane recolours (red → amber, since headcount and legality both feed the colour), and the
+   violations panel on the right updates in place — no reload.
+4. Click a chip once to lock it (thicker border, 🔒, remove disabled); click again to unlock.
+   Remove an unlocked chip via its **×** — an "Undo" banner appears for a few seconds.
+5. Drag a chip from one lane to another (desktop only — the calendar itself is desktop-first,
+   unlike every other screen in the app).
+6. Click any row in the **Violations** panel — the grid scrolls to and briefly highlights the day
+   it concerns (or, for month-wide rules like `MAX_SHIFTS_PER_MONTH`, selects that employee in the
+   filter instead).
+7. Use **Filter to employee** to see one person's month and their shift count.
+8. Click **Publish schedule** — since `ERROR`-severity violations exist, the confirm step asks you
+   to publish anyway (`override_violations`, same as the API above). After publishing, edit an
+   assignment again: its chip gets a blue ring and the header shows "N shift(s) changed since
+   publish" — both read `Assignment.modified_after_publish`.
+9. Click **Print** (or your browser's print preview) — the header, filter, picker, and side panel
+   disappear; only the grid remains, landscape, one page.
+10. Log in as `employee01@example.com` / `password123` and open **My schedule** (mobile-first —
+    try a narrow viewport). Own shifts are listed with total count at the top, colleagues on shared
+    shifts are named, and the shift you just re-edited after publish is marked "Changed since
+    publish".
+11. Confirm employees never reach the manager calendar: the **Manager** nav link is gone, and
+    `/manager/periods/{id}/schedule` redirects to `/availability`.
+
+Component tests: `frontend/src/features/schedule/{colorLogic,AssignPickerDialog,ViolationsPanel}.test.tsx`.

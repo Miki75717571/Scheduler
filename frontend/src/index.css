@@ -31,3 +31,19 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Manager schedule calendar print sheet (CLAUDE.md/task brief: "pin it up in
+   the kitchen" - one page, readable, no nav chrome). Anything meant to stay
+   interactive-only carries `print:hidden` at the component level; this just
+   sets the page geometry and forces colour so status backgrounds survive a
+   "print backgrounds" toggle being off. */
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
