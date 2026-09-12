@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
 from sqlalchemy import event
@@ -55,3 +55,17 @@ SessionLocal = async_sessionmaker(
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as db:
         yield db
+
+
+def get_session_factory() -> Callable[[], AsyncSession]:
+    """A FastAPI dependency, not a plain module constant, so a background
+    task started from a request (app/services/solver_service.py's
+    `run_solver_in_background`) opens its session through the same seam a
+    test can override - the request's own `db` (from `get_db` above) is
+    already torn down by the time a BackgroundTask runs, so the task must
+    open a brand new session, and in tests that new session has to land on
+    the test database/transaction, not this module's real `SessionLocal`
+    (which always points at `settings.async_database_url` - the dev/prod
+    database, never the test one). See tests/conftest.py's override.
+    """
+    return SessionLocal

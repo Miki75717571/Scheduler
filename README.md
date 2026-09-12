@@ -267,3 +267,52 @@ the grid's "not yet rated" state has something to show.
    formula and weight-sum invariant also have standalone unit tests in
    `backend/tests/unit/test_score_service.py`, and the grid component in
    `frontend/src/features/scores/ScoringGrid.test.tsx`.
+
+## Phase 5 (solver core) — what to click through
+
+The CP-SAT solver itself (`backend/app/scheduling/` — pure, no DB access, guarded by
+`backend/tests/scheduling/test_purity.py`) plus the background-run plumbing around it. No
+**Generate** screen yet — exercised directly through `/docs` (Swagger UI).
+
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+   from `backend/` if you haven't already.
+2. Open http://localhost:8000/docs and **Authorize** as the admin the terminal printed.
+3. `GET /api/v1/periods` — find the `COLLECTING` period (next month's availability demo from
+   Phase 2). `PATCH /api/v1/periods/{id}/state` with `{"state": "LOCKED"}` — the solver only runs
+   against `LOCKED` or `GENERATED` periods (trying it on `DRAFT`/`COLLECTING` returns
+   `409 schedule_run.period_not_ready`).
+4. `POST /api/v1/periods/{period_id}/schedule-runs` with `{}` — returns `202` immediately with the
+   run `id` and `status: "PENDING"`; the actual solve happens in a background task (never inside
+   the request, per `CLAUDE.md` "Running it"), so on real data it'll typically already be
+   `SUCCESS` by the time you poll it a moment later.
+5. `GET /api/v1/schedule-runs/{run_id}` — poll until `status` is `SUCCESS` (or `FAILED`, with
+   `error_message` set). On success: `objective_value`, `solve_time_ms`, `solver_status`
+   (`OPTIMAL`/`FEASIBLE` — never `INFEASIBLE`, see ARCHITECTURE.md ss4.1), `stats` (coverage %,
+   preference satisfaction rate, fairness spread, shifts per employee), and `diagnostics` (every
+   understaffed slot and every employee below their contract minimum, as message keys + params).
+6. `GET /api/v1/periods/{period_id}/assignments` — the solver's picks, `source: AUTO`. Lock one
+   (`PATCH .../assignments/{id}/lock`), then `POST .../schedule-runs` again — the locked
+   assignment survives the regeneration untouched; everything else is re-optimized around it.
+7. `GET /api/v1/periods/{period_id}/schedule-runs` — every run for this period, newest first, so a
+   manager can compare a regenerate against what it replaced.
+8. `GET /api/v1/solver/weights` (admin-only — `403` for a manager token) — the live, tunable
+   objective coefficients (ARCHITECTURE.md ss4.1's `W_UNDER`/`W_MIN_SHIFT`/etc). `PUT` a new set
+   and re-run the solver — the next run's `params_snapshot` reflects the change; past runs keep the
+   weights they actually used, frozen at creation time.
+9. The solver golden fixtures are the real proof this phase works —
+   `backend/tests/scheduling/test_cpsat_golden.py`: a normal month, everyone wanting mornings, one
+   person available only Fridays, a closed holiday, a genuinely impossible month (still returns a
+   usable schedule with red-tile diagnostics, never `INFEASIBLE`), a high scorer winning a
+   contested shift while a low scorer still reaches their contract minimum, `preference_debt`
+   breaking a tie, and locked assignments surviving even a pre-existing manager lock conflict.
+   `backend/tests/api/test_schedule_runs.py` covers the same invariants through the real DB layer
+   (background-task lifecycle, role enforcement, lock preservation on regenerate).
+
+**One deliberate deviation worth knowing about:** `Rule.severity` (HARD/SOFT) governs the
+schedule-phase *validator* (ARCHITECTURE.md ss3.5 — checked independently, after the fact); the
+*solver*'s hard/soft split is fixed by rule type per ARCHITECTURE.md ss4.1 regardless of each
+rule's configured severity (e.g. `MAX_CONSECUTIVE_DAYS` is seeded `SOFT` for the validator's
+purposes but is always a hard sliding-window constraint inside the solver). This mirrors the
+validator/solver duplication the codebase already documents ("the solver tells you what it
+*intended*; the validator tells you what is *true* right now") but is easy to miss since both read
+from the same `Rule` rows.

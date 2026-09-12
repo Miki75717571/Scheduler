@@ -13,9 +13,11 @@ from app.models import (  # noqa: F401  registers tables on Base.metadata
     invitation,
     rule,
     schedule_period,
+    schedule_run,
     score_criterion,
     shift_slot,
     shift_type,
+    solver_weight_config,
     user,
 )
 

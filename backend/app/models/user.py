@@ -53,6 +53,14 @@ class User(Base):
     )
     contract_min_shifts: Mapped[int | None] = mapped_column(Integer, nullable=True)
     contract_max_shifts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ARCHITECTURE.md ss4.2: +1 when a PREFERRED slot is denied by a solver
+    # run, -1 when granted - carried across months so the objective can
+    # correct for a run of bad luck (app/services/solver_service.py's
+    # `_apply_preference_debt`). Never shown to employees (same never-see-
+    # your-own-score rule as EmployeeScore, ARCHITECTURE.md ss5).
+    preference_debt: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     locale: Mapped[str] = mapped_column(
         String(5), nullable=False, default="pl", server_default="pl"
     )

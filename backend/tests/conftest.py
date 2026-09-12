@@ -7,7 +7,7 @@ from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.db.session import configure_sqlite, get_db
+from app.db.session import configure_sqlite, get_db, get_session_factory
 from app.main import app
 from app.models import (  # noqa: F401  registers tables on Base.metadata
     assignment,
@@ -17,9 +17,11 @@ from app.models import (  # noqa: F401  registers tables on Base.metadata
     invitation,
     rule,
     schedule_period,
+    schedule_run,
     score_criterion,
     shift_slot,
     shift_type,
+    solver_weight_config,
     user,
 )
 
@@ -71,7 +73,20 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
+    def _make_background_session() -> AsyncSession:
+        # A background task (app/services/solver_service.py's
+        # run_solver_in_background) can't reuse `db_session` itself - it runs
+        # after the request's dependencies have already been torn down, and
+        # in production that session would already be closed. It DOES need
+        # to land on the same connection/transaction as `db_session`, though,
+        # or it would never see this test's uncommitted-to-the-real-database
+        # rows (see db_session's own docstring on why a SAVEPOINT is used at
+        # all) - so it's a fresh Session on the same underlying connection,
+        # exactly like db_session's own construction below.
+        return TestingSessionLocal(bind=db_session.bind, join_transaction_mode="create_savepoint")
+
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_session_factory] = lambda: _make_background_session
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as async_client:
         yield async_client
