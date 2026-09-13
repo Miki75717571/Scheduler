@@ -7,6 +7,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider, useAuth } from "./lib/auth-context";
 import { AcceptInvitationPage } from "./pages/AcceptInvitationPage";
 import { AdminCriteriaPage } from "./pages/AdminCriteriaPage";
+import { AdminSolverWeightsPage } from "./pages/AdminSolverWeightsPage";
 import { AvailabilityPage } from "./pages/AvailabilityPage";
 import { EmployeeSchedulePage } from "./pages/EmployeeSchedulePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -89,6 +90,14 @@ function AppRoutes() {
         element={
           <AdminRoute>
             <AdminCriteriaPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/solver-weights"
+        element={
+          <AdminRoute>
+            <AdminSolverWeightsPage />
           </AdminRoute>
         }
       />

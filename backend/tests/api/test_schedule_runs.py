@@ -174,6 +174,88 @@ async def test_regenerating_preserves_a_locked_assignment(
     assert kept_assignment["is_locked"] is True
 
 
+async def test_revert_restores_assignments_from_before_the_run(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    manager_headers, period_id, slots, _types = await _setup(
+        client, db_session, manager_email="run-mgr-revert@example.com", year=2031, month=5
+    )
+    kept = await create_user(
+        db_session, email="run-emp-revert-kept@example.com", role=Role.EMPLOYEE
+    )
+    other = await create_user(
+        db_session, email="run-emp-revert-other@example.com", role=Role.EMPLOYEE
+    )
+    all_slot_ids = [s["id"] for s in slots]
+    await _seed_availability(
+        db_session, period_id=period_id, user_id=other.id, slot_ids=all_slot_ids
+    )
+
+    # A manual, unlocked assignment made before ever running the solver - this
+    # is exactly what "revert" must bring back, since the run is about to
+    # wipe every non-locked assignment.
+    manual_slot = slots[0]
+    manual_create = await client.post(
+        f"/api/v1/periods/{period_id}/assignments",
+        json={"shift_slot_id": manual_slot["id"], "user_id": str(kept.id)},
+        headers=manager_headers,
+    )
+    assert manual_create.status_code == 201, manual_create.text
+    manual_assignment_id = manual_create.json()["assignment"]["id"]
+
+    run_response = await client.post(
+        f"/api/v1/periods/{period_id}/schedule-runs", json={}, headers=manager_headers
+    )
+    assert run_response.status_code == 202
+    run_id = run_response.json()["id"]
+
+    after_run = await client.get(
+        f"/api/v1/periods/{period_id}/assignments", headers=manager_headers
+    )
+    after_run_ids = {a["id"] for a in after_run.json()}
+    assert manual_assignment_id not in after_run_ids, "the run should have replaced the manual pick"
+
+    revert_response = await client.post(
+        f"/api/v1/schedule-runs/{run_id}/revert", headers=manager_headers
+    )
+    assert revert_response.status_code == 200, revert_response.text
+    assert revert_response.json()["reverted_at"] is not None
+
+    after_revert = await client.get(
+        f"/api/v1/periods/{period_id}/assignments", headers=manager_headers
+    )
+    restored = after_revert.json()
+    assert len(restored) == 1
+    assert restored[0]["shift_slot_id"] == manual_slot["id"]
+    assert restored[0]["user_id"] == str(kept.id)
+
+    second_revert = await client.post(
+        f"/api/v1/schedule-runs/{run_id}/revert", headers=manager_headers
+    )
+    assert second_revert.status_code == 409
+    assert second_revert.json()["detail"]["message_key"] == "schedule_run.already_reverted"
+
+
+async def test_employee_cannot_revert_a_schedule_run(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    manager_headers, period_id, _slots, _types = await _setup(
+        client, db_session, manager_email="run-mgr-revert-403@example.com", year=2031, month=6
+    )
+    employee = await create_user(
+        db_session, email="run-emp-revert-403@example.com", role=Role.EMPLOYEE
+    )
+    employee_headers = auth_headers(await login(client, employee.email))
+
+    run_response = await client.post(
+        f"/api/v1/periods/{period_id}/schedule-runs", json={}, headers=manager_headers
+    )
+    run_id = run_response.json()["id"]
+
+    response = await client.post(f"/api/v1/schedule-runs/{run_id}/revert", headers=employee_headers)
+    assert response.status_code == 403
+
+
 async def test_solver_weights_are_admin_only_and_roundtrip(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:

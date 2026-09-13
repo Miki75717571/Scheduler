@@ -268,11 +268,12 @@ the grid's "not yet rated" state has something to show.
    `backend/tests/unit/test_score_service.py`, and the grid component in
    `frontend/src/features/scores/ScoringGrid.test.tsx`.
 
-## Phase 5 (solver core) — what to click through
+## Phase 5 (solver core, backend) — what to click through
 
 The CP-SAT solver itself (`backend/app/scheduling/` — pure, no DB access, guarded by
-`backend/tests/scheduling/test_purity.py`) plus the background-run plumbing around it. No
-**Generate** screen yet — exercised directly through `/docs` (Swagger UI).
+`backend/tests/scheduling/test_purity.py`) plus the background-run plumbing around it, exercised
+directly through `/docs` (Swagger UI). See the next section for the **Generate** screen built on
+top of this API.
 
 1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
    from `backend/` if you haven't already.
@@ -316,3 +317,68 @@ purposes but is always a hard sliding-window constraint inside the solver). This
 validator/solver duplication the codebase already documents ("the solver tells you what it
 *intended*; the validator tells you what is *true* right now") but is easy to miss since both read
 from the same `Rule` rows.
+
+## Phase 5 (frontend) — what to click through
+
+The **Generate** flow on top of the API above: a button on the manager schedule calendar, a
+before/after confirmation so regenerating never silently discards manual work, a one-click revert,
+translated diagnostics, run history with before/after comparison, and an admin screen for tuning
+the solver's objective weights in plain language.
+
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+   from `backend/` if you haven't already — it seeds a `COLLECTING` period for **next month** with
+   a full month of plausible availability already filled in for most employees (see
+   `app/seed.py`'s `_seed_demo_period`).
+2. Log in as the manager/admin the terminal printed, open **Manager**, click into that `COLLECTING`
+   period, and click **Lock availability** (the solver only runs against `LOCKED`/`GENERATED`
+   periods — the **Generate schedule** button stays disabled with an explanation on any earlier
+   state, and again once the period is `PUBLISHED`).
+3. Click **Open schedule calendar**. At the top, the **Generate schedule** section: since this
+   period has no assignments yet, confirming shows "There are no existing assignments to lose."
+   Click **Generate**.
+4. Watch the status line move `Queued…` → `Solving… this can take up to 30s.` → `Schedule
+   generated.` — the calendar below fills in **in place**, no reload. Against the seeded demo data
+   this typically lands at **100% coverage** (30+ employees against ~70 shifts is generous) with a
+   **preference satisfaction** somewhere in the 70–80% range; a couple of employees who were left
+   in `NOT_STARTED`/`DRAFT` (never declared any availability — see `app.seed`'s
+   `_DRAFT_ONLY_COUNT`) show up in **Below contract minimum** with 0 assigned shifts, which is also
+   why the **fairness spread** number can look large — it's driven entirely by those two, not by
+   the solver favouring anyone unfairly among people who actually declared availability. The
+   shifts-per-employee bars make this legible at a glance instead of just a single spread number.
+5. If **Understaffed shifts** appears under **Why the schedule looks like this**, click a listed
+   date to jump the calendar to it, or click the **?** button on any red/amber lane directly — the
+   dialog lists everyone who was available but not used, each with a reason (`Already working a
+   MORNING shift that day`, `Already at their contract maximum of N shifts`, a rest-hours shortfall,
+   or — when no rule stood in the way — `Available, but another candidate was prioritised`).
+6. Click any solver-generated chip (dashed border, `A` badge) — the detail dialog confirms
+   `Automatically assigned by the solver`, whether that person was `AVAILABLE`/`PREFERRED`, and
+   that it isn't locked yet.
+7. Hover a chip and click its 🔒 to lock it, then click **Regenerate schedule** — the confirmation
+   now reads "1 locked assignment(s) will be kept" and "N unlocked assignment(s) will be discarded
+   and replaced." Confirm: the locked chip survives untouched; everything else is re-optimized
+   around it, exactly like the API-level test in the previous section.
+8. Under the just-finished run's results, click **Revert to before this run** and confirm — the
+   calendar snaps back to exactly what it was right before that regeneration (here, just your one
+   locked chip), proving the "protect my manual work" safety net without needing the database.
+9. Scroll to **Run history** — every run for this period, newest first, with objective value and
+   solve time. Click **View** on the older run: a **Compared to the previous run** block appears
+   showing coverage/preference/fairness deltas with `better`/`worse`/`unchanged` labels.
+10. As an admin, open **Scheduling weights** (`/admin/solver-weights`, admin-only nav link) — each
+    of the seven objective coefficients from ARCHITECTURE.md ss4.1 with a plain-language label and
+    explanation (never the raw `W_FAIR`-style name). Change one, **Save weights**, generate again —
+    the new run's results reflect it. **Reset to defaults** restores the values baked into
+    `app/scheduling/domain.py`. Reopen an older run in Run history — it still shows the weights it
+    actually used at the time, unaffected by the change.
+11. Confirm employees can't reach any of this: no **Generate** section, no **Scheduling weights**
+    nav link; `/admin/solver-weights` redirects away for an employee (or a manager — it's
+    admin-only); `POST /api/v1/periods/{id}/schedule-runs`, `.../revert`, and
+    `GET|PUT /api/v1/solver/weights` all return `403` for an employee token, and the weights
+    endpoints return `403` for a manager token too.
+
+Component tests:
+`frontend/src/features/schedule/generate/{GeneratePanel,ConfirmGenerateDialog,RunDiagnostics}.test.tsx`
+cover the generate flow's idle/running/success/failure states, the locked/discard confirmation, and
+the translated diagnostics panel. Backend: `backend/tests/api/test_schedule_runs.py` covers the
+revert endpoint end-to-end, and `backend/tests/scheduling/test_cpsat_golden.py` covers the
+`unused_available` reasoning (already-assigned-same-day, contract-max-reached, and the
+not-prioritized fallback when no hard rule excludes a candidate) as pure solver-output invariants.

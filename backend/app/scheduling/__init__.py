@@ -22,6 +22,7 @@ from app.scheduling.domain import (
     SolverOutput,
     SolverStats,
     SolverWeights,
+    UnusedAvailableEmployee,
 )
 from app.scheduling.weights import ALGORITHM_VERSION, weights_from_dict, weights_to_dict
 
@@ -41,6 +42,7 @@ __all__ = [
     "SolverOutput",
     "SolverStats",
     "SolverWeights",
+    "UnusedAvailableEmployee",
     "solve",
     "weights_from_dict",
     "weights_to_dict",

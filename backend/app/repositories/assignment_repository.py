@@ -69,6 +69,14 @@ class AssignmentRepository:
             )
         )
 
+    async def delete_all_by_period(self, period_id: uuid.UUID) -> None:
+        """Wipes every assignment (locked included) for a period - used by
+        app/services/solver_service.py's `revert_run` to fully restore a
+        `pre_run_snapshot`, which already carries its own lock flags.
+        """
+        slot_ids = select(ShiftSlot.id).where(ShiftSlot.period_id == period_id)
+        await self._db.execute(delete(Assignment).where(Assignment.shift_slot_id.in_(slot_ids)))
+
     async def create(self, assignment: Assignment) -> Assignment:
         self._db.add(assignment)
         await self._db.flush()

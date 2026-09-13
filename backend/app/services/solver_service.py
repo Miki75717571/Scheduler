@@ -140,6 +140,15 @@ def _resolve_employee_input(user: User, rules: list[Rule], *, score: float | Non
     )
 
 
+def _assignment_snapshot(assignment: Assignment) -> dict[str, Any]:
+    return {
+        "shift_slot_id": str(assignment.shift_slot_id),
+        "user_id": str(assignment.user_id),
+        "source": assignment.source.value,
+        "is_locked": assignment.is_locked,
+    }
+
+
 def _slot_diagnostic_to_json(diagnostic: SlotDiagnostic) -> dict[str, Any]:
     return {
         "slot_id": diagnostic.slot_id,
@@ -151,6 +160,7 @@ def _slot_diagnostic_to_json(diagnostic: SlotDiagnostic) -> dict[str, Any]:
         "available_staff": diagnostic.available_staff,
         "message_key": diagnostic.message_key,
         "message_params": diagnostic.message_params,
+        "unused_available": [asdict(u) for u in diagnostic.unused_available],
     }
 
 
@@ -211,11 +221,18 @@ class SolverService:
             "num_search_workers": default_config.num_search_workers,
         }
 
+        # Taken now, before the solve even starts - "revert" always means
+        # "undo this run", not "undo whatever the DB happens to look like
+        # when the button is clicked" (CLAUDE.md's "protect my manual work").
+        existing_assignments = await self._assignments.list_by_period(period.id)
+        pre_run_snapshot = [_assignment_snapshot(a) for a in existing_assignments]
+
         run = ScheduleRun(
             period_id=period.id,
             status=ScheduleRunStatus.PENDING,
             algorithm_version=ALGORITHM_VERSION,
             params_snapshot=snapshot,
+            pre_run_snapshot=pre_run_snapshot,
             created_by_user_id=actor.id,
         )
         await self._runs.create(run)
@@ -231,6 +248,57 @@ class SolverService:
 
     async def list_runs(self, period: SchedulePeriod) -> list[ScheduleRun]:
         return await self._runs.list_by_period(period.id)
+
+    async def revert_run(self, run_id: uuid.UUID, *, actor: User) -> ScheduleRun:
+        """Restores the period's assignments to exactly what they were right
+        before this run was created (`pre_run_snapshot`), undoing whatever
+        the run itself (and anything since) did. One-click, per CLAUDE.md -
+        deliberately a full restore rather than a diff/merge, so it is
+        trivial to reason about what "revert" means.
+        """
+        run = await self.get_run(run_id)
+        if run.status != ScheduleRunStatus.SUCCESS:
+            raise SolverError("schedule_run.not_revertible")
+        if run.pre_run_snapshot is None:
+            raise SolverError("schedule_run.no_snapshot")
+        if run.reverted_at is not None:
+            raise SolverError("schedule_run.already_reverted")
+
+        period = await self._periods.get_by_id(run.period_id)
+        if period is None:
+            raise SolverError("period.not_found")
+
+        await self._assignments.delete_all_by_period(period.id)
+        for entry in run.pre_run_snapshot:
+            self._db.add(
+                Assignment(
+                    shift_slot_id=uuid.UUID(entry["shift_slot_id"]),
+                    user_id=uuid.UUID(entry["user_id"]),
+                    source=AssignmentSource(entry["source"]),
+                    is_locked=entry["is_locked"],
+                    created_by_user_id=actor.id,
+                    modified_after_publish=period.state == PeriodState.PUBLISHED,
+                )
+            )
+        await self._db.flush()
+
+        run.reverted_at = datetime.now(UTC)
+        run.reverted_by_user_id = actor.id
+        await self._runs.save(run)
+        await self._audit_log.create(
+            AuditLog(
+                actor_user_id=actor.id,
+                period_id=period.id,
+                action="schedule_run.revert",
+                entity_type="ScheduleRun",
+                entity_id=run.id,
+                before=None,
+                after={"restored_assignments": len(run.pre_run_snapshot)},
+            )
+        )
+        await self._db.commit()
+        await self._db.refresh(run)
+        return run
 
     # --- building the pure input --------------------------------------------
 

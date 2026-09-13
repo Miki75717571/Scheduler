@@ -13,6 +13,7 @@
     "manager": "Manager",
     "scores": "Oceny",
     "criteria": "Kryteria",
+    "solverWeights": "Wagi grafikowania",
     "profile": "Profil"
   },
   "health": {
@@ -84,7 +85,12 @@
     "score_criterion.weights_must_sum_to_one": "Wagi aktywnych kryteriów muszą sumować się dokładnie do 1.0 (obecnie {{total}}).",
     "score.user_not_found": "Nie znaleziono tego pracownika.",
     "score.criterion_not_found": "Nie znaleziono tego kryterium.",
-    "score.criterion_inactive": "To kryterium jest nieaktywne i nie można go oceniać."
+    "score.criterion_inactive": "To kryterium jest nieaktywne i nie można go oceniać.",
+    "schedule_run.not_found": "Nie znaleziono tego uruchomienia grafiku.",
+    "schedule_run.period_not_ready": "Ten okres nie jest jeszcze gotowy do wygenerowania grafiku.",
+    "schedule_run.not_revertible": "Cofnąć można tylko pomyślnie zakończone uruchomienie.",
+    "schedule_run.no_snapshot": "To uruchomienie nie ma zapisanego stanu do przywrócenia.",
+    "schedule_run.already_reverted": "To uruchomienie zostało już cofnięte."
   },
   "weekdaysShort": {
     "MON": "Pon",
@@ -108,6 +114,15 @@
     "MIN_AVAILABILITY_COUNT": "{{actual}}/{{required}} zadeklarowanych zmian",
     "MIN_AVAILABILITY_WEEKEND": "{{actual}}/{{required}} zmian weekendowych",
     "MIN_AVAILABILITY_IN_SET": "{{weekday}} {{shift}}: {{actual}}/{{required}}"
+  },
+  "solver": {
+    "slot_understaffed": "Przypisano {{assigned_staff}}/{{required_staff}} osób — dostępnych było {{available_staff}}.",
+    "employee_below_contract_min": "{{full_name}}: {{assigned_count}}/{{contract_min_shifts}} zmian (zadeklarowano {{declared_count}}) — brakuje {{shortfall}} do minimum umowy.",
+    "unused_already_assigned_same_day": "Tego dnia pracuje już na zmianie {{shift_type_code}}.",
+    "unused_contract_max_reached": "Osiągnięto już maksimum umowy: {{contract_max_shifts}} zmian.",
+    "unused_rest_rule": "Zostałoby tylko {{actual}}h odpoczynku — wymagane co najmniej {{required}}h.",
+    "unused_max_consecutive_days": "Przekroczyłoby to maksimum {{allowed}} kolejnych dni pracy.",
+    "unused_not_prioritized": "Dostępny/a, ale do tej zmiany wybrano inną osobę (kompromis sprawiedliwości/preferencji, nie naruszenie zasady)."
   },
   "availability": {
     "title": "Moja dostępność",
@@ -241,7 +256,78 @@
     "staffCount": "{{assigned}}/{{required}}",
     "generatedHint": "Oznacz ten okres jako wygenerowany, aby móc go opublikować.",
     "removeConfirmTitle": "Usuń przypisanie",
-    "noSlots": "Dla tego okresu nie zdefiniowano jeszcze żadnych zmian."
+    "noSlots": "Dla tego okresu nie zdefiniowano jeszcze żadnych zmian.",
+    "autoBadge": "Przypisano automatycznie przez solver",
+    "manualBadge": "Przypisano ręcznie",
+    "slotExplainButton": "Dlaczego?",
+    "detailTitle": "{{name}} — {{shift}}, {{date}}",
+    "detailSource": "Źródło",
+    "detailSourceAuto": "Przypisano automatycznie przez solver",
+    "detailSourceManual": "Przypisano ręcznie",
+    "detailAvailability": "Dostępność",
+    "detailAvailabilityAvailable": "Zaznaczono jako dostępny/a na tę zmianę",
+    "detailAvailabilityPreferred": "Zaznaczono jako preferowaną na tę zmianę",
+    "detailAvailabilityUnknown": "Nie zaznaczono dostępności na tę zmianę",
+    "detailLocked": "Zablokowane — chronione przed kolejnym generowaniem",
+    "detailUnlocked": "Niezablokowane",
+    "slotDetailTitle": "{{shift}}, {{date}}",
+    "slotDetailAvailableCount": "{{count}} osób zaznaczyło dostępność na tę zmianę.",
+    "slotDetailNoRunYet": "Wygeneruj grafik, aby zobaczyć, dlaczego dostępne osoby nie zostały tu wykorzystane.",
+    "slotDetailUnusedTitle": "Dlaczego nie zostały wykorzystane"
+  },
+  "generate": {
+    "button": "Generuj grafik",
+    "regenerateButton": "Wygeneruj ponownie",
+    "disabledNotLocked": "Zablokuj dostępność przed wygenerowaniem grafiku.",
+    "disabledPublished": "Ten grafik został opublikowany i nie można go już ponownie wygenerować.",
+    "confirmTitle": "Wygenerować grafik?",
+    "confirmLockedCount": "{{count}} zablokowane przypisanie(a) zostaną zachowane.",
+    "confirmDiscardCount": "{{count}} niezablokowane przypisanie(a) zostaną odrzucone i zastąpione.",
+    "confirmNoExisting": "Nie ma żadnych istniejących przypisań do utracenia.",
+    "confirmButton": "Generuj",
+    "statusPending": "W kolejce…",
+    "statusRunning": "Obliczanie… może to potrwać do {{seconds}}s.",
+    "statusSuccess": "Grafik wygenerowany.",
+    "statusFailed": "Generowanie nie powiodło się: {{message}}",
+    "statusTimeout": "To trwa dłużej niż zwykle. Uruchomienie kontynuuje działanie w tle — sprawdź ponownie za chwilę.",
+    "revertButton": "Cofnij do stanu sprzed tego uruchomienia",
+    "revertConfirm": "Cofnąć do przypisań sprzed tego uruchomienia? Tej operacji nie można cofnąć.",
+    "revertedBadge": "Cofnięto {{date}}",
+    "statsTitle": "Wyniki",
+    "statsCoverage": "Obsada",
+    "statsPreference": "Spełnienie preferencji",
+    "statsFairnessSpread": "Rozrzut sprawiedliwości",
+    "statsFairnessSpreadHint": "Różnica liczby zmian między najbardziej a najmniej obciążonym pracownikiem w tym miesiącu.",
+    "statsShiftsPerEmployee": "Zmiany na pracownika",
+    "statsNoPreferences": "Nikt nie zadeklarował preferowanej zmiany.",
+    "diagnosticsTitle": "Dlaczego grafik tak wygląda",
+    "diagnosticsSlotsTitle": "Zmiany z niepełną obsadą ({{count}})",
+    "diagnosticsEmployeesTitle": "Poniżej minimum umowy ({{count}})",
+    "diagnosticsNoIssues": "Brak niedoborów obsady, wszyscy osiągnęli swoje minimum umowy.",
+    "diagnosticsUnusedTitle": "Dostępni, ale niewykorzystani:",
+    "historyTitle": "Historia uruchomień",
+    "historyEmpty": "Brak uruchomień dla tego okresu.",
+    "historyColumnWhen": "Kiedy",
+    "historyColumnObjective": "Funkcja celu",
+    "historyColumnSolveTime": "Czas obliczeń",
+    "historyColumnStatus": "Status",
+    "historyViewButton": "Pokaż",
+    "compareTitle": "W porównaniu z poprzednim uruchomieniem",
+    "compareCoverage": "Obsada: {{value}}",
+    "comparePreference": "Spełnienie preferencji: {{value}}",
+    "compareFairness": "Rozrzut sprawiedliwości: {{value}}",
+    "compareBetter": "lepiej",
+    "compareWorse": "gorzej",
+    "compareSame": "bez zmian",
+    "objectiveValue": "Wartość funkcji celu: {{value}}",
+    "solveTime": "Obliczono w {{ms}}ms",
+    "algorithmVersion": "Algorytm {{version}}",
+    "runStatus": {
+      "PENDING": "W kolejce",
+      "RUNNING": "W trakcie",
+      "SUCCESS": "Sukces",
+      "FAILED": "Niepowodzenie"
+    }
   },
   "employeeSchedule": {
     "title": "Mój grafik",
@@ -301,5 +387,42 @@
     "deactivateButton": "Dezaktywuj",
     "deactivateConfirm": "Dezaktywować \"{{name}}\"? Wagi aktywnych kryteriów nadal muszą sumować się do 1.0.",
     "createSuccess": "Utworzono kryterium (nieaktywne — ustaw wagę i aktywuj je poniżej)."
+  },
+  "solverWeights": {
+    "title": "Wagi grafikowania",
+    "intro": "Te wartości sterują tym, jak automatyczny grafik równoważy sprzeczne cele podczas budowania grafiku. Wyższa liczba oznacza, że solver mocniej stara się unikać danego problemu, nawet kosztem pozostałych. Zmiana tych wartości dotyczy tylko przyszłych uruchomień — poprzednie nadal pokazują wagi, których faktycznie użyto.",
+    "resetButton": "Przywróć domyślne",
+    "saveButton": "Zapisz wagi",
+    "saved": "Wagi zapisane.",
+    "fields": {
+      "understaffing": {
+        "label": "Unikaj niedoboru obsady na zmianach",
+        "help": "Jak mocno unikać sytuacji, w której zmianie brakuje wymaganej liczby osób. To zwykle powinna być zdecydowanie najwyższa wartość."
+      },
+      "contract_min_shortfall": {
+        "label": "Unikaj przypisywania mniej zmian niż wynika z umowy",
+        "help": "Jak mocno unikać dawania komuś mniej zmian, niż wymaga tego jego umowa."
+      },
+      "denied_preference": {
+        "label": "Staraj się przyznawać preferowane zmiany",
+        "help": "Ile dodatkowej wagi dać zmianom oznaczonym jako \"preferowane\" w porównaniu z tymi tylko \"dostępnymi\"."
+      },
+      "fairness_spread": {
+        "label": "Wyrównuj liczbę zmian między pracownikami",
+        "help": "Jak bardzo priorytetyzować podobną liczbę zmian dla wszystkich, zamiast pozwalać, by kilka osób dostawało znacznie więcej niż inni."
+      },
+      "unpopular_shift_spread": {
+        "label": "Równomiernie rozkładaj zmiany weekendowe",
+        "help": "Jak bardzo priorytetyzować równomierne rozłożenie zmian weekendowych i innych niepopularnych, zamiast obciążać nimi wciąż te same osoby."
+      },
+      "score_weight": {
+        "label": "Faworyzuj lepiej ocenianych pracowników przy spornych zmianach",
+        "help": "Jak bardzo ocena pracownika wpływa na to, kto dostaje zmianę, gdy chce jej kilka osób naraz."
+      },
+      "preference_debt": {
+        "label": "Rekompensuj wcześniej odrzucone preferencje",
+        "help": "Jak bardzo faworyzować osobę, której preferowane zmiany były odrzucane w poprzednich miesiącach, aby te same osoby nie były wciąż pomijane."
+      }
+    }
   }
 }

@@ -24,6 +24,8 @@ interface ManagerMonthGridProps {
   onAddClick: (slot: ShiftSlot) => void;
   onToggleLock: (assignment: Assignment) => void;
   onRemove: (assignment: Assignment) => void;
+  onOpenAssignmentDetail: (assignment: Assignment) => void;
+  onOpenSlotDetail: (slot: ShiftSlot) => void;
   onMove: (assignmentId: string, targetSlotId: string) => void;
 }
 
@@ -39,6 +41,8 @@ export function ManagerMonthGrid({
   onAddClick,
   onToggleLock,
   onRemove,
+  onOpenAssignmentDetail,
+  onOpenSlotDetail,
   onMove,
 }: ManagerMonthGridProps) {
   const { t, i18n } = useTranslation();
@@ -51,7 +55,8 @@ export function ManagerMonthGrid({
   }
   for (const date of Object.keys(slotsByDate)) {
     slotsByDate[date].sort(
-      (a, b) => shiftTypesById[a.shift_type_id].sort_order - shiftTypesById[b.shift_type_id].sort_order,
+      (a, b) =>
+        shiftTypesById[a.shift_type_id].sort_order - shiftTypesById[b.shift_type_id].sort_order,
     );
   }
 
@@ -70,14 +75,22 @@ export function ManagerMonthGrid({
     <div className="overflow-x-auto">
       <div className="grid min-w-[880px] grid-cols-7 gap-1 print:min-w-0 print:gap-0.5">
         {WEEKDAY_CODES.map((code) => (
-          <div key={code} className="px-1 pb-1 text-center text-xs font-semibold text-muted-foreground">
+          <div
+            key={code}
+            className="px-1 pb-1 text-center text-xs font-semibold text-muted-foreground"
+          >
             {t(`weekdaysShort.${code}`)}
           </div>
         ))}
         {weeks.map((week, weekIndex) =>
           week.map((date, dayIndex) => {
             if (!date) {
-              return <div key={`${weekIndex}-${dayIndex}`} className="rounded border border-transparent" />;
+              return (
+                <div
+                  key={`${weekIndex}-${dayIndex}`}
+                  className="rounded border border-transparent"
+                />
+              );
             }
             const daySlots = slotsByDate[date] ?? [];
             return (
@@ -104,7 +117,11 @@ export function ManagerMonthGrid({
                     onAdd={() => onAddClick(slot)}
                     onToggleLock={onToggleLock}
                     onRemove={onRemove}
-                    onDropAssignment={(payload: DragPayload) => onMove(payload.assignmentId, slot.id)}
+                    onOpenAssignmentDetail={onOpenAssignmentDetail}
+                    onOpenSlotDetail={() => onOpenSlotDetail(slot)}
+                    onDropAssignment={(payload: DragPayload) =>
+                      onMove(payload.assignmentId, slot.id)
+                    }
                   />
                 ))}
               </div>

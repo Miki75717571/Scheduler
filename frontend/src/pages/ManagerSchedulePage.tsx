@@ -18,9 +18,13 @@ import {
   setAssignmentLock,
 } from "../features/schedule/api";
 import { AssignPickerDialog } from "../features/schedule/AssignPickerDialog";
+import { AssignmentDetailDialog } from "../features/schedule/AssignmentDetailDialog";
 import { EmployeeFilter } from "../features/schedule/EmployeeFilter";
+import { fetchScheduleRuns } from "../features/schedule/generate/api";
+import { GeneratePanel } from "../features/schedule/generate/GeneratePanel";
 import { ManagerMonthGrid } from "../features/schedule/ManagerMonthGrid";
 import { PublishBar } from "../features/schedule/PublishBar";
+import { SlotDetailDialog } from "../features/schedule/SlotDetailDialog";
 import type { ViolationJumpTarget } from "../features/schedule/ViolationsPanel";
 import { ViolationsPanel } from "../features/schedule/ViolationsPanel";
 import { useAuth } from "../lib/auth-context";
@@ -46,6 +50,8 @@ export function ManagerSchedulePage() {
   const [mutationError, setMutationError] = useState<unknown>(null);
   const [undoState, setUndoState] = useState<Assignment | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
+  const [detailSlot, setDetailSlot] = useState<ShiftSlot | null>(null);
 
   const periodQuery = useQuery({
     queryKey: ["period", periodId],
@@ -78,6 +84,14 @@ export function ManagerSchedulePage() {
     queryFn: () => fetchAvailableEmployees(periodId as string, pickerSlot!.id),
     enabled: Boolean(periodId && pickerSlot),
   });
+  // Shares its cache key with GeneratePanel's own history query - reading it
+  // here too (rather than lifting state) avoids a second network round trip
+  // just to look up one slot's diagnostic for SlotDetailDialog.
+  const scheduleRunsQuery = useQuery({
+    queryKey: ["schedule-runs", periodId],
+    queryFn: () => fetchScheduleRuns(periodId as string),
+    enabled: Boolean(periodId),
+  });
 
   if (!periodId) return null;
   // useParams() types every param as possibly-undefined regardless of the
@@ -95,6 +109,13 @@ export function ManagerSchedulePage() {
   const nameById = Object.fromEntries(roster.map((r) => [r.user_id, r.full_name]));
   const dateBySlotId = Object.fromEntries((slotsQuery.data ?? []).map((s) => [s.id, s.date]));
   const shiftTypesById = Object.fromEntries((shiftTypesQuery.data ?? []).map((st) => [st.id, st]));
+  const shiftTypeNameByCode = Object.fromEntries(
+    (shiftTypesQuery.data ?? []).map((st) => [
+      st.code,
+      i18n.language === "pl" ? st.name_pl : st.name_en,
+    ]),
+  );
+  const latestSuccessfulRun = (scheduleRunsQuery.data ?? []).find((r) => r.status === "SUCCESS");
 
   function setAssignmentsCache(updater: (old: Assignment[]) => Assignment[]) {
     queryClient.setQueryData<Assignment[]>(["assignments", pid], (old) => updater(old ?? []));
@@ -124,7 +145,9 @@ export function ManagerSchedulePage() {
     setAssignmentsCache((old) => [...old, optimistic]);
     try {
       const result = await createAssignment(pid, { shift_slot_id: pickerSlot.id, user_id: userId });
-      setAssignmentsCache((old) => old.map((a) => (a.id === tempId ? (result.assignment as Assignment) : a)));
+      setAssignmentsCache((old) =>
+        old.map((a) => (a.id === tempId ? (result.assignment as Assignment) : a)),
+      );
       applyMutationResult(result);
       setPickerSlot(null);
     } catch (error) {
@@ -163,7 +186,9 @@ export function ManagerSchedulePage() {
         user_id: removed.user_id,
         is_locked: removed.is_locked,
       });
-      setAssignmentsCache((old) => old.map((a) => (a.id === tempId ? (result.assignment as Assignment) : a)));
+      setAssignmentsCache((old) =>
+        old.map((a) => (a.id === tempId ? (result.assignment as Assignment) : a)),
+      );
       applyMutationResult(result);
     } catch (error) {
       setAssignmentsCache((old) => old.filter((a) => a.id !== tempId));
@@ -288,6 +313,15 @@ export function ManagerSchedulePage() {
         />
       </div>
 
+      <GeneratePanel
+        periodId={pid}
+        periodState={period.state}
+        assignments={assignments}
+        nameById={nameById}
+        shiftTypeNameByCode={shiftTypeNameByCode}
+        onJumpToDate={(date) => handleJump({ date, userId: null })}
+      />
+
       {mutationError !== null && <ApiErrorText error={mutationError} />}
 
       {undoState && (
@@ -295,12 +329,19 @@ export function ManagerSchedulePage() {
           <span>
             {t("schedule.removedNotice", {
               name: undoState.full_name,
-              shift: shiftTypesById[slots.find((s) => s.id === undoState.shift_slot_id)?.shift_type_id ?? ""]
-                ?.code,
+              shift:
+                shiftTypesById[
+                  slots.find((s) => s.id === undoState.shift_slot_id)?.shift_type_id ?? ""
+                ]?.code,
               date: dateBySlotId[undoState.shift_slot_id],
             })}
           </span>
-          <Button type="button" size="sm" variant="secondary" onClick={() => void handleUndoRemove()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => void handleUndoRemove()}
+          >
             {t("schedule.undoRemove")}
           </Button>
         </div>
@@ -319,6 +360,8 @@ export function ManagerSchedulePage() {
           onAddClick={setPickerSlot}
           onToggleLock={(a) => void handleToggleLock(a)}
           onRemove={(a) => void handleRemove(a)}
+          onOpenAssignmentDetail={setDetailAssignment}
+          onOpenSlotDetail={setDetailSlot}
           onMove={(assignmentId, targetSlotId) => void handleMove(assignmentId, targetSlotId)}
         />
 
@@ -344,10 +387,13 @@ export function ManagerSchedulePage() {
       {pickerSlot && pickerShiftType && (
         <AssignPickerDialog
           shiftTypeName={i18n.language === "pl" ? pickerShiftType.name_pl : pickerShiftType.name_en}
-          dateLabel={new Date(pickerSlot.date).toLocaleDateString(i18n.language === "pl" ? "pl-PL" : "en-US", {
-            day: "numeric",
-            month: "short",
-          })}
+          dateLabel={new Date(pickerSlot.date).toLocaleDateString(
+            i18n.language === "pl" ? "pl-PL" : "en-US",
+            {
+              day: "numeric",
+              month: "short",
+            },
+          )}
           roster={roster}
           assignedUserIds={pickerAssignedUserIds}
           candidates={availableEmployeesQuery.data ?? []}
@@ -359,6 +405,41 @@ export function ManagerSchedulePage() {
             setPickerSlot(null);
             setPickError(null);
           }}
+        />
+      )}
+
+      {detailAssignment && (
+        <AssignmentDetailDialog
+          assignment={detailAssignment}
+          periodId={pid}
+          shiftTypeName={
+            i18n.language === "pl"
+              ? shiftTypesById[
+                  slots.find((s) => s.id === detailAssignment.shift_slot_id)?.shift_type_id ?? ""
+                ]?.name_pl
+              : shiftTypesById[
+                  slots.find((s) => s.id === detailAssignment.shift_slot_id)?.shift_type_id ?? ""
+                ]?.name_en
+          }
+          dateLabel={dateBySlotId[detailAssignment.shift_slot_id] ?? ""}
+          onClose={() => setDetailAssignment(null)}
+        />
+      )}
+
+      {detailSlot && (
+        <SlotDetailDialog
+          slotId={detailSlot.id}
+          periodId={pid}
+          shiftTypeName={
+            i18n.language === "pl"
+              ? shiftTypesById[detailSlot.shift_type_id]?.name_pl
+              : shiftTypesById[detailSlot.shift_type_id]?.name_en
+          }
+          dateLabel={detailSlot.date}
+          diagnostic={
+            latestSuccessfulRun?.diagnostics?.slots.find((d) => d.slot_id === detailSlot.id) ?? null
+          }
+          onClose={() => setDetailSlot(null)}
         />
       )}
     </div>

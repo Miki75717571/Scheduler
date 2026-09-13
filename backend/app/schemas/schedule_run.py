@@ -21,6 +21,9 @@ class ScheduleRunRead(BaseModel):
     stats: dict[str, Any] | None
     diagnostics: dict[str, Any] | None
     error_message: str | None
+    pre_run_snapshot: list[dict[str, Any]] | None
+    reverted_at: datetime | None
+    reverted_by_user_id: uuid.UUID | None
     created_by_user_id: uuid.UUID
     created_at: datetime
     started_at: datetime | None

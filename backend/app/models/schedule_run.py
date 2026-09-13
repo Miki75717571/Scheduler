@@ -31,6 +31,13 @@ class ScheduleRun(Base):
     later. `stats`/`diagnostics` mirror app/scheduling/domain.py's
     SolverStats/Diagnostics as plain JSON (see solver_service.py's
     `_stats_to_json`/`_diagnostics_to_json`).
+
+    `pre_run_snapshot` freezes every assignment that existed for the period
+    at the moment this run was created (locked and unlocked alike) - the
+    manager's one-click "revert to before generation" (solver_service.py's
+    `revert_run`) restores exactly this list rather than trying to reverse
+    whatever the solver did. `reverted_at`/`reverted_by_user_id` record that
+    a revert happened, so the run history can show it.
     """
 
     __tablename__ = "schedule_runs"
@@ -58,6 +65,11 @@ class ScheduleRun(Base):
     stats: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     diagnostics: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    pre_run_snapshot: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    reverted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    reverted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False
     )

@@ -47,6 +47,11 @@ export function Layout({ children }: { children: ReactNode }) {
                 {t("nav.criteria")}
               </Link>
             )}
+            {isAdmin && (
+              <Link to="/admin/solver-weights" className="hover:text-foreground">
+                {t("nav.solverWeights")}
+              </Link>
+            )}
             <Link to="/profile" className="hover:text-foreground">
               {t("nav.profile")}
             </Link>

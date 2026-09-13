@@ -171,6 +171,101 @@ export interface ScoreGridRow {
   composite: number | null;
 }
 
+export type AvailabilityLevel = "AVAILABLE" | "PREFERRED";
+
+export interface UnusedAvailableEmployee {
+  employee_id: string;
+  full_name: string;
+  level: AvailabilityLevel;
+  message_key: string;
+  message_params: Record<string, unknown>;
+}
+
+export interface SlotDiagnostic {
+  slot_id: string;
+  date: string;
+  shift_type_code: string;
+  required_staff: number;
+  min_staff: number;
+  assigned_staff: number;
+  available_staff: number;
+  message_key: string;
+  message_params: Record<string, unknown>;
+  unused_available: UnusedAvailableEmployee[];
+}
+
+export interface EmployeeDiagnostic {
+  employee_id: string;
+  assigned_count: number;
+  contract_min_shifts: number;
+  shortfall: number;
+  declared_count: number;
+  message_key: string;
+  message_params: Record<string, unknown>;
+}
+
+export interface ScheduleDiagnostics {
+  slots: SlotDiagnostic[];
+  employees: EmployeeDiagnostic[];
+}
+
+export interface SolverStats {
+  total_slots: number;
+  total_required_staff: number;
+  total_assigned: number;
+  understaffed_slot_count: number;
+  coverage_rate: number;
+  preference_satisfaction_rate: number | null;
+  fairness_spread: number;
+  shifts_per_employee: Record<string, number>;
+}
+
+export type ScheduleRunStatus = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED";
+
+export interface SolverWeightsValues {
+  understaffing: number;
+  contract_min_shortfall: number;
+  denied_preference: number;
+  fairness_spread: number;
+  unpopular_shift_spread: number;
+  score_weight: number;
+  preference_debt: number;
+}
+
+export interface SolverWeights extends SolverWeightsValues {
+  id: string;
+  updated_at: string | null;
+  updated_by_user_id: string | null;
+}
+
+export interface ScheduleRunParamsSnapshot {
+  weights: SolverWeightsValues;
+  time_limit_seconds: number;
+  random_seed: number;
+  num_search_workers: number;
+}
+
+export interface ScheduleRun {
+  id: string;
+  period_id: string;
+  status: ScheduleRunStatus;
+  algorithm_version: string;
+  params_snapshot: ScheduleRunParamsSnapshot;
+  objective_value: number | null;
+  solve_time_ms: number | null;
+  solver_status: string | null;
+  stats: SolverStats | null;
+  diagnostics: ScheduleDiagnostics | null;
+  error_message: string | null;
+  pre_run_snapshot: unknown[] | null;
+  reverted_at: string | null;
+  reverted_by_user_id: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 export interface ScoreHistoryEntry {
   id: string;
   criterion_id: string;

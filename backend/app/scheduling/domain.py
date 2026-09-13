@@ -108,6 +108,29 @@ class AssignmentOutput:
 
 
 @dataclass(frozen=True)
+class UnusedAvailableEmployee:
+    """One AVAILABLE/PREFERRED employee who was *not* placed into an
+    understaffed slot, with a reason a manager can actually act on - the
+    other half of "the solver's failure output becomes the feature"
+    (ARCHITECTURE.md ss4.1): it is not enough to say a slot is short-staffed,
+    the manager needs to know why the people who said they could work it
+    weren't used.
+
+    `message_key` is one of "solver.unused_already_assigned_same_day",
+    "solver.unused_contract_max_reached", "solver.unused_rest_rule",
+    "solver.unused_max_consecutive_days", or "solver.unused_not_prioritized"
+    (a hard constraint away from the slot, but the objective's fairness/score/
+    coverage trade-offs favoured someone else instead).
+    """
+
+    employee_id: str
+    full_name: str
+    level: AvailabilityLevel
+    message_key: str
+    message_params: dict[str, object]
+
+
+@dataclass(frozen=True)
 class SlotDiagnostic:
     """One human-readable red-tile explanation - only emitted for slots that
     are actually understaffed (ARCHITECTURE.md ss4.1's "the solver's failure
@@ -123,6 +146,7 @@ class SlotDiagnostic:
     available_staff: int
     message_key: str
     message_params: dict[str, object]
+    unused_available: tuple[UnusedAvailableEmployee, ...] = ()
 
 
 @dataclass(frozen=True)

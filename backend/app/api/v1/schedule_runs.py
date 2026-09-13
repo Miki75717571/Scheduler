@@ -88,6 +88,25 @@ async def get_schedule_run(
     return ScheduleRunRead.model_validate(run)
 
 
+@router.post(
+    "/schedule-runs/{run_id}/revert",
+    response_model=ScheduleRunRead,
+    dependencies=[Depends(require_role(Role.MANAGER, Role.ADMIN))],
+)
+async def revert_schedule_run(
+    run_id: uuid.UUID, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
+) -> ScheduleRunRead:
+    """Restores the period's assignments to exactly what they were right
+    before this run - the manager's one-click undo (CLAUDE.md "protect my
+    manual work").
+    """
+    try:
+        run = await SolverService(db).revert_run(run_id, actor=current_user)
+    except SolverError as exc:
+        raise _http_error(exc) from exc
+    return ScheduleRunRead.model_validate(run)
+
+
 @router.get(
     "/solver/weights",
     response_model=SolverWeightsRead,

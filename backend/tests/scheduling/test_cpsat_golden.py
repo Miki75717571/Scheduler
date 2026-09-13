@@ -15,6 +15,7 @@ from app.scheduling import (
     SolverWeights,
     solve,
 )
+from app.scheduling.domain import UnusedAvailableEmployee
 from tests.scheduling.helpers import (
     DETERMINISTIC_CONFIG,
     EVENING,
@@ -400,3 +401,82 @@ def test_determinism_with_fixed_seed_and_single_worker() -> None:
         return frozenset((a.employee_id, a.slot_id) for a in output.assignments)
 
     assert _run() == _run()
+
+
+def _unused_reason_by_employee(
+    diagnostics: SolverOutput, slot_id: str
+) -> dict[str, UnusedAvailableEmployee]:
+    diagnostic = next(d for d in diagnostics.diagnostics.slot_diagnostics if d.slot_id == slot_id)
+    return {u.employee_id: u for u in diagnostic.unused_available}
+
+
+def test_understaffed_slot_explains_why_available_people_werent_used() -> None:
+    """The manager-facing "why is this slot still short?" explanation
+    (ARCHITECTURE.md ss4.1's "the solver's failure output becomes the
+    feature", extended per the generate-screen brief): every AVAILABLE/
+    PREFERRED person the solver didn't place into an understaffed slot gets a
+    reason a manager can act on, not just a headcount.
+    """
+    day1 = dates_range(2)[0]
+    morning = make_slot(day1, MORNING, required=1, minimum=1, maximum=1)
+    evening = make_slot(day1, EVENING, required=2, minimum=1, maximum=2)
+
+    busy_elsewhere = make_employee("busy", contract_min=0, contract_max=18)
+    capped = make_employee("capped", contract_min=0, contract_max=0)
+    free = make_employee("free", contract_min=0, contract_max=18)
+
+    locked = [LockedAssignmentInput(employee_id=busy_elsewhere.id, slot_id=morning.id)]
+    availability = [
+        AvailabilityInput(employee_id=busy_elsewhere.id, slot_id=evening.id, level="AVAILABLE"),
+        AvailabilityInput(employee_id=capped.id, slot_id=evening.id, level="AVAILABLE"),
+        AvailabilityInput(employee_id=free.id, slot_id=evening.id, level="AVAILABLE"),
+    ]
+
+    inp = SolverInput(
+        period_id="p",
+        slots=(morning, evening),
+        employees=(busy_elsewhere, capped, free),
+        availability=tuple(availability),
+        locked_assignments=tuple(locked),
+        config=DETERMINISTIC_CONFIG,
+    )
+    output = solve(inp)
+
+    assert {a.employee_id for a in output.assignments if a.slot_id == evening.id} == {"free"}
+    reasons = _unused_reason_by_employee(output, evening.id)
+    assert reasons["busy"].message_key == "solver.unused_already_assigned_same_day"
+    assert reasons["busy"].message_params["shift_type_code"] == "MORNING"
+    assert reasons["capped"].message_key == "solver.unused_contract_max_reached"
+    assert reasons["capped"].message_params["contract_max_shifts"] == 0
+
+
+def test_understaffed_slot_falls_back_to_not_prioritized_when_no_hard_rule_excludes_anyone() -> (
+    None
+):
+    """Two free, unconflicted candidates competing for one seat that the
+    slot's own `max_staff` caps below `required_staff` - neither hard rule
+    excludes either of them, so whichever the objective didn't pick must be
+    explained as a soft trade-off, not a fabricated hard-rule reason.
+    """
+    slot = make_slot(dates_range(1)[0], EVENING, required=2, minimum=1, maximum=1)
+    a = make_employee("a", contract_min=0, contract_max=18)
+    b = make_employee("b", contract_min=0, contract_max=18)
+    availability = [
+        AvailabilityInput(employee_id=a.id, slot_id=slot.id, level="AVAILABLE"),
+        AvailabilityInput(employee_id=b.id, slot_id=slot.id, level="AVAILABLE"),
+    ]
+
+    inp = SolverInput(
+        period_id="p",
+        slots=(slot,),
+        employees=(a, b),
+        availability=tuple(availability),
+        config=DETERMINISTIC_CONFIG,
+    )
+    output = solve(inp)
+
+    assigned = {a.employee_id for a in output.assignments}
+    assert len(assigned) == 1
+    unused_id = ({"a", "b"} - assigned).pop()
+    reasons = _unused_reason_by_employee(output, slot.id)
+    assert reasons[unused_id].message_key == "solver.unused_not_prioritized"

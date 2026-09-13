@@ -13,6 +13,7 @@
     "manager": "Manager",
     "scores": "Scores",
     "criteria": "Criteria",
+    "solverWeights": "Scheduling weights",
     "profile": "Profile"
   },
   "health": {
@@ -84,7 +85,12 @@
     "score_criterion.weights_must_sum_to_one": "Active criteria weights must add up to exactly 1.0 (currently {{total}}).",
     "score.user_not_found": "That employee could not be found.",
     "score.criterion_not_found": "That criterion could not be found.",
-    "score.criterion_inactive": "That criterion is inactive and can't be scored."
+    "score.criterion_inactive": "That criterion is inactive and can't be scored.",
+    "schedule_run.not_found": "That schedule run could not be found.",
+    "schedule_run.period_not_ready": "This period isn't ready to generate a schedule yet.",
+    "schedule_run.not_revertible": "Only a successfully completed run can be reverted.",
+    "schedule_run.no_snapshot": "This run has no saved state to revert to.",
+    "schedule_run.already_reverted": "This run has already been reverted."
   },
   "weekdaysShort": {
     "MON": "Mon",
@@ -108,6 +114,15 @@
     "MIN_AVAILABILITY_COUNT": "{{actual}}/{{required}} shifts declared",
     "MIN_AVAILABILITY_WEEKEND": "{{actual}}/{{required}} weekend shifts declared",
     "MIN_AVAILABILITY_IN_SET": "{{weekday}} {{shift}}: {{actual}}/{{required}}"
+  },
+  "solver": {
+    "slot_understaffed": "{{assigned_staff}}/{{required_staff}} staff assigned — {{available_staff}} people were available.",
+    "employee_below_contract_min": "{{full_name}}: {{assigned_count}}/{{contract_min_shifts}} shifts (declared {{declared_count}}) — {{shortfall}} short of their contract minimum.",
+    "unused_already_assigned_same_day": "Already working a {{shift_type_code}} shift that day.",
+    "unused_contract_max_reached": "Already at their contract maximum of {{contract_max_shifts}} shifts.",
+    "unused_rest_rule": "Would leave only {{actual}}h rest — needs at least {{required}}h.",
+    "unused_max_consecutive_days": "Would exceed the maximum of {{allowed}} consecutive working days.",
+    "unused_not_prioritized": "Available, but another candidate was prioritised for this shift (a fairness/preference trade-off, not a rule violation)."
   },
   "availability": {
     "title": "My availability",
@@ -241,7 +256,78 @@
     "staffCount": "{{assigned}}/{{required}}",
     "generatedHint": "Mark this period as generated to enable publishing.",
     "removeConfirmTitle": "Remove assignment",
-    "noSlots": "No shifts defined for this period yet."
+    "noSlots": "No shifts defined for this period yet.",
+    "autoBadge": "Automatically assigned by the solver",
+    "manualBadge": "Manually assigned",
+    "slotExplainButton": "Why?",
+    "detailTitle": "{{name}} — {{shift}}, {{date}}",
+    "detailSource": "Source",
+    "detailSourceAuto": "Automatically assigned by the solver",
+    "detailSourceManual": "Manually assigned",
+    "detailAvailability": "Availability",
+    "detailAvailabilityAvailable": "Marked available for this shift",
+    "detailAvailabilityPreferred": "Marked preferred for this shift",
+    "detailAvailabilityUnknown": "Did not mark this shift as available",
+    "detailLocked": "Locked — protected from the next regeneration",
+    "detailUnlocked": "Not locked",
+    "slotDetailTitle": "{{shift}}, {{date}}",
+    "slotDetailAvailableCount": "{{count}} people marked themselves available for this shift.",
+    "slotDetailNoRunYet": "Generate a schedule to see why the people who were available weren't used here.",
+    "slotDetailUnusedTitle": "Why they weren't used"
+  },
+  "generate": {
+    "button": "Generate schedule",
+    "regenerateButton": "Regenerate schedule",
+    "disabledNotLocked": "Lock availability before generating a schedule.",
+    "disabledPublished": "This schedule has been published and can no longer be regenerated.",
+    "confirmTitle": "Generate schedule?",
+    "confirmLockedCount": "{{count}} locked assignment(s) will be kept.",
+    "confirmDiscardCount": "{{count}} unlocked assignment(s) will be discarded and replaced.",
+    "confirmNoExisting": "There are no existing assignments to lose.",
+    "confirmButton": "Generate",
+    "statusPending": "Queued…",
+    "statusRunning": "Solving… this can take up to {{seconds}}s.",
+    "statusSuccess": "Schedule generated.",
+    "statusFailed": "Generation failed: {{message}}",
+    "statusTimeout": "This is taking longer than expected. The run keeps going in the background — check back shortly.",
+    "revertButton": "Revert to before this run",
+    "revertConfirm": "Revert to the assignments from before this run? This can't be undone.",
+    "revertedBadge": "Reverted {{date}}",
+    "statsTitle": "Results",
+    "statsCoverage": "Coverage",
+    "statsPreference": "Preference satisfaction",
+    "statsFairnessSpread": "Fairness spread",
+    "statsFairnessSpreadHint": "Difference between the busiest and quietest employee's shift count this month.",
+    "statsShiftsPerEmployee": "Shifts per employee",
+    "statsNoPreferences": "Nobody declared a preferred shift.",
+    "diagnosticsTitle": "Why the schedule looks like this",
+    "diagnosticsSlotsTitle": "Understaffed shifts ({{count}})",
+    "diagnosticsEmployeesTitle": "Below contract minimum ({{count}})",
+    "diagnosticsNoIssues": "No understaffed shifts, and everyone reached their contract minimum.",
+    "diagnosticsUnusedTitle": "Available but not used:",
+    "historyTitle": "Run history",
+    "historyEmpty": "No runs yet for this period.",
+    "historyColumnWhen": "When",
+    "historyColumnObjective": "Objective",
+    "historyColumnSolveTime": "Solve time",
+    "historyColumnStatus": "Status",
+    "historyViewButton": "View",
+    "compareTitle": "Compared to the previous run",
+    "compareCoverage": "Coverage: {{value}}",
+    "comparePreference": "Preference satisfaction: {{value}}",
+    "compareFairness": "Fairness spread: {{value}}",
+    "compareBetter": "better",
+    "compareWorse": "worse",
+    "compareSame": "unchanged",
+    "objectiveValue": "Objective value: {{value}}",
+    "solveTime": "Solved in {{ms}}ms",
+    "algorithmVersion": "Algorithm {{version}}",
+    "runStatus": {
+      "PENDING": "Queued",
+      "RUNNING": "Running",
+      "SUCCESS": "Success",
+      "FAILED": "Failed"
+    }
   },
   "employeeSchedule": {
     "title": "My schedule",
@@ -301,5 +387,42 @@
     "deactivateButton": "Deactivate",
     "deactivateConfirm": "Deactivate \"{{name}}\"? Active weights must still sum to 1.0 afterwards.",
     "createSuccess": "Criterion created (inactive — set its weight and activate it below)."
+  },
+  "solverWeights": {
+    "title": "Scheduling weights",
+    "intro": "These control how the automatic scheduler trades off competing goals when it builds a schedule. A higher number means the scheduler tries harder to avoid that problem, even at the cost of the others. Changing these only affects future runs — past runs keep showing the weights they actually used.",
+    "resetButton": "Reset to defaults",
+    "saveButton": "Save weights",
+    "saved": "Weights saved.",
+    "fields": {
+      "understaffing": {
+        "label": "Avoid leaving shifts understaffed",
+        "help": "How strongly to avoid leaving a shift short of its required staff count. This should almost always be the highest number by far."
+      },
+      "contract_min_shortfall": {
+        "label": "Avoid leaving people under their contract minimum",
+        "help": "How strongly to avoid giving someone fewer shifts than their contract requires."
+      },
+      "denied_preference": {
+        "label": "Try to grant preferred shifts",
+        "help": "How much extra weight to give someone's \"preferred\" shifts over shifts they only marked as merely available."
+      },
+      "fairness_spread": {
+        "label": "Give everyone a similar number of shifts",
+        "help": "How much to prioritise keeping shift counts even across employees, instead of a few people getting far more than others."
+      },
+      "unpopular_shift_spread": {
+        "label": "Spread weekend shifts evenly",
+        "help": "How much to prioritise spreading weekend and other unpopular shifts evenly, instead of the same few people always covering them."
+      },
+      "score_weight": {
+        "label": "Favor higher-scoring employees for contested shifts",
+        "help": "How much an employee's performance score influences who wins a shift when several people want the same one."
+      },
+      "preference_debt": {
+        "label": "Make up for past denied preferences",
+        "help": "How much to favor someone whose preferred shifts were denied in previous months, so the same people aren't repeatedly passed over."
+      }
+    }
   }
 }

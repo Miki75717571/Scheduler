@@ -21,6 +21,8 @@ interface ShiftLaneProps {
   onAdd: () => void;
   onToggleLock: (assignment: Assignment) => void;
   onRemove: (assignment: Assignment) => void;
+  onOpenAssignmentDetail: (assignment: Assignment) => void;
+  onOpenSlotDetail: () => void;
   onDropAssignment: (payload: DragPayload) => void;
 }
 
@@ -34,6 +36,8 @@ export function ShiftLane({
   onAdd,
   onToggleLock,
   onRemove,
+  onOpenAssignmentDetail,
+  onOpenSlotDetail,
   onDropAssignment,
 }: ShiftLaneProps) {
   const { t } = useTranslation();
@@ -79,10 +83,24 @@ export function ShiftLane({
         <span
           className="shrink-0"
           aria-label={status}
-          title={t(`schedule.staffCount`, { assigned: assignments.length, required: slot.required_staff })}
+          title={t(`schedule.staffCount`, {
+            assigned: assignments.length,
+            required: slot.required_staff,
+          })}
         >
           {SLOT_STATUS_ICON[status]} {assignments.length}/{slot.required_staff}
         </span>
+        {!slot.is_closed && (status === "red" || status === "amber") && (
+          <button
+            type="button"
+            onClick={onOpenSlotDetail}
+            aria-label={t("schedule.slotExplainButton")}
+            title={t("schedule.slotExplainButton")}
+            className="shrink-0 rounded border border-current px-1 text-[10px] leading-none print:hidden"
+          >
+            ?
+          </button>
+        )}
       </div>
 
       {slot.is_closed ? (
@@ -96,6 +114,7 @@ export function ShiftLane({
               dimmed={selectedEmployeeId !== null && assignment.user_id !== selectedEmployeeId}
               onToggleLock={() => onToggleLock(assignment)}
               onRemove={() => onRemove(assignment)}
+              onOpenDetail={() => onOpenAssignmentDetail(assignment)}
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = "move";
                 event.dataTransfer.setData(
