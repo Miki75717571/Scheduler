@@ -6,7 +6,9 @@ import { Link, useParams } from "react-router-dom";
 import type { PeriodState } from "../api/types";
 import { ApiErrorText } from "../components/ApiErrorText";
 import { fetchShiftTypes } from "../features/availability/api";
+import { FeasibilityPanel } from "../features/manager/FeasibilityPanel";
 import {
+  fetchFeasibility,
   fetchPeriod,
   fetchSlots,
   fetchTracker,
@@ -50,6 +52,11 @@ export function ManagerPeriodDetailPage() {
     enabled: Boolean(periodId),
   });
   const shiftTypesQuery = useQuery({ queryKey: ["shift-types"], queryFn: fetchShiftTypes });
+  const feasibilityQuery = useQuery({
+    queryKey: ["feasibility", periodId],
+    queryFn: () => fetchFeasibility(periodId as string),
+    enabled: Boolean(periodId),
+  });
 
   if (!periodId) return null;
 
@@ -88,10 +95,7 @@ export function ManagerPeriodDetailPage() {
     }
   }
 
-  async function handleSlotSave(
-    slotId: string,
-    payload: Parameters<typeof updateSlot>[2],
-  ) {
+  async function handleSlotSave(slotId: string, payload: Parameters<typeof updateSlot>[2]) {
     await updateSlot(periodId as string, slotId, payload);
     await queryClient.invalidateQueries({ queryKey: ["period-slots", periodId] });
   }
@@ -109,7 +113,9 @@ export function ManagerPeriodDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">{monthLabel(period.year, period.month, i18n.language)}</h1>
+        <h1 className="text-xl font-semibold">
+          {monthLabel(period.year, period.month, i18n.language)}
+        </h1>
         <p className="text-sm text-muted-foreground">
           {t(`manager.stateLabel.${period.state}`)}
           {period.availability_deadline && (
@@ -123,11 +129,15 @@ export function ManagerPeriodDetailPage() {
               })}
             </>
           )}
-          {countdown.kind === "days" && ` · ${t("manager.daysRemaining", { count: countdown.count })}`}
-          {countdown.kind === "hours" && ` · ${t("availability.countdownHours", { count: countdown.count })}`}
+          {countdown.kind === "days" &&
+            ` · ${t("manager.daysRemaining", { count: countdown.count })}`}
+          {countdown.kind === "hours" &&
+            ` · ${t("availability.countdownHours", { count: countdown.count })}`}
           {countdown.kind === "passed" && ` · ${t("availability.countdownPassed")}`}
         </p>
       </div>
+
+      {feasibilityQuery.data && <FeasibilityPanel summary={feasibilityQuery.data} />}
 
       <section className="space-y-2">
         <PeriodStateControls state={period.state} onTransition={handleTransition} />
@@ -141,7 +151,9 @@ export function ManagerPeriodDetailPage() {
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">{t("manager.trackerTitle")}</h2>
-        {trackerQuery.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
+        {trackerQuery.isLoading && (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        )}
         {trackerQuery.isError && <ApiErrorText error={trackerQuery.error} />}
         {reopenError !== null && <ApiErrorText error={reopenError} />}
         {trackerQuery.data && (

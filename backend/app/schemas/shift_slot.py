@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, time
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +16,12 @@ class ShiftSlotRead(BaseModel):
     max_staff: int
     is_closed: bool
     note: str | None
+    # Effective for this specific date (app/services/shift_effective.py) -
+    # never read ShiftType.start_time/end_time directly once a slot is in
+    # hand, since Mon-Thu/Friday/weekend can each have their own times under
+    # the same shift_type_id (CLAUDE.md "per-weekday shift times").
+    start_time: time
+    end_time: time
 
 
 class ShiftSlotUpdate(BaseModel):

@@ -27,7 +27,8 @@ export function DayTile({
   const weekend = isWeekend(weekday);
   const dayNumber = parseIsoDate(dateIso).getDate();
   const orderedSlots = [...slots].sort(
-    (a, b) => shiftTypesById[a.shift_type_id].sort_order - shiftTypesById[b.shift_type_id].sort_order,
+    (a, b) =>
+      shiftTypesById[a.shift_type_id].sort_order - shiftTypesById[b.shift_type_id].sort_order,
   );
 
   return (
@@ -52,7 +53,7 @@ export function DayTile({
               key={slot.id}
               status={statusBySlotId[slot.id] ?? "UNAVAILABLE"}
               label={name}
-              sublabel={shiftType.start_time.slice(0, 5)}
+              sublabel={slot.start_time.slice(0, 5)}
               closed={slot.is_closed}
               disabled={!editable}
               onCycle={() => onCycle(slot.id)}

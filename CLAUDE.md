@@ -102,7 +102,9 @@ uv run ruff format .           # format
 uv run mypy .                  # type check
 uv run alembic upgrade head    # apply migrations
 uv run alembic revision --autogenerate -m "..."  # new migration
-uv run python -m app.seed      # seed demo data
+uv run python -m app.seed      # seed real config (shift types, rules, criteria) + bootstrap admin
+SEED_DEMO_DATA=1 uv run python -m app.seed  # + fake employees/period/schedule/scores, for a demo to click through
+uv run python -m app.reset_data --yes  # wipe everything except admin(s) + real config
 ```
 
 **Frontend (from `frontend/`):**

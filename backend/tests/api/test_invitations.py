@@ -140,10 +140,10 @@ async def test_invalid_invitation_token_is_rejected(client: AsyncClient) -> None
     assert response.json()["detail"]["message_key"] == "invitation.not_found"
 
 
-async def test_accept_url_is_present_in_development_response(
+async def test_accept_url_is_present_when_using_console_provider(
     client: AsyncClient, db_session: AsyncSession, captured_email: dict[str, str]
 ) -> None:
-    assert settings.app_env == "development"  # sanity: this is what the test suite runs as
+    assert settings.email_provider == "console"  # sanity: what the test suite runs as
     await _create_user(db_session, email="olive@example.com", role=Role.ADMIN)
     token = await _login(client, "olive@example.com")
 
@@ -157,12 +157,15 @@ async def test_accept_url_is_present_in_development_response(
     assert response.json()["accept_url"] == captured_email["accept_url"]
 
 
-async def test_accept_url_is_absent_in_production(
+async def test_accept_url_is_present_even_in_production_when_still_on_console(
     client: AsyncClient,
     db_session: AsyncSession,
     captured_email: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The owner deliberately stays on the console email provider past
+    development (CLAUDE.md JOB 8) - the link must still be visible then,
+    since app_env alone no longer decides this."""
     await _create_user(db_session, email="pete@example.com", role=Role.ADMIN)
     token = await _login(client, "pete@example.com")
 
@@ -174,9 +177,88 @@ async def test_accept_url_is_absent_in_production(
     )
 
     assert response.status_code == 201
+    assert response.json()["accept_url"] == captured_email["accept_url"]
+
+
+async def test_accept_url_is_absent_when_using_resend(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    captured_email: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _create_user(db_session, email="quinn2@example.com", role=Role.ADMIN)
+    token = await _login(client, "quinn2@example.com")
+
+    monkeypatch.setattr(settings, "email_provider", "resend")
+    response = await client.post(
+        "/api/v1/invitations",
+        json={"email": "realmail@example.com", "role": "EMPLOYEE"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
     assert response.json()["accept_url"] is None
     # The invite still works end-to-end - only the response field is gated.
     assert captured_email["accept_url"] is not None
+
+
+async def test_employee_cannot_list_invitations(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _create_user(db_session, email="rex@example.com", role=Role.EMPLOYEE)
+    token = await _login(client, "rex@example.com")
+
+    response = await client.get("/api/v1/invitations", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+
+
+async def test_admin_can_list_resend_and_revoke_invitations(
+    client: AsyncClient, db_session: AsyncSession, captured_email: dict[str, str]
+) -> None:
+    await _create_user(db_session, email="sam@example.com", role=Role.ADMIN)
+    token = await _login(client, "sam@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = await client.post(
+        "/api/v1/invitations",
+        json={"email": "future@example.com", "role": "EMPLOYEE"},
+        headers=headers,
+    )
+    invitation_id = create_response.json()["id"]
+    original_accept_url = captured_email["accept_url"]
+
+    list_response = await client.get("/api/v1/invitations", headers=headers)
+    assert list_response.status_code == 200
+    listed = next(i for i in list_response.json() if i["id"] == invitation_id)
+    assert listed["status"] == "PENDING"
+
+    resend_response = await client.post(
+        f"/api/v1/invitations/{invitation_id}/resend", headers=headers
+    )
+    assert resend_response.status_code == 200
+    assert resend_response.json()["accept_url"] != original_accept_url
+    old_token = original_accept_url.split("token=")[1]
+    stale_accept = await client.post(
+        "/api/v1/invitations/accept",
+        json={"token": old_token, "full_name": "Late", "password": "somepassword"},
+    )
+    assert stale_accept.status_code == 400
+    assert stale_accept.json()["detail"]["message_key"] == "invitation.not_found"
+
+    revoke_response = await client.post(
+        f"/api/v1/invitations/{invitation_id}/revoke", headers=headers
+    )
+    assert revoke_response.status_code == 200
+    assert revoke_response.json()["status"] == "REVOKED"
+
+    new_token = captured_email["accept_url"].split("token=")[1]
+    revoked_accept = await client.post(
+        "/api/v1/invitations/accept",
+        json={"token": new_token, "full_name": "Too Late", "password": "somepassword"},
+    )
+    assert revoked_accept.status_code == 400
+    assert revoked_accept.json()["detail"]["message_key"] == "invitation.revoked"
 
 
 async def test_cannot_invite_an_already_registered_email(

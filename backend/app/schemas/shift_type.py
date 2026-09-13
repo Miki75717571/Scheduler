@@ -3,6 +3,37 @@ from datetime import time
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.rules.weekdays import Weekday
+
+
+class ShiftTypeWeekdayOverrideRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    shift_type_id: uuid.UUID
+    weekday: Weekday
+    start_time: time
+    end_time: time
+    min_staff: int
+    required_staff: int
+    max_staff: int
+
+
+class ShiftTypeWeekdayOverrideWrite(BaseModel):
+    start_time: time
+    end_time: time
+    min_staff: int = Field(ge=0)
+    required_staff: int = Field(ge=0)
+    max_staff: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _check_ranges(self) -> "ShiftTypeWeekdayOverrideWrite":
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        if not (self.min_staff <= self.required_staff <= self.max_staff):
+            raise ValueError("min_staff <= required_staff <= max_staff")
+        return self
+
 
 class ShiftTypeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -20,6 +51,7 @@ class ShiftTypeRead(BaseModel):
     default_max_staff: int
     sort_order: int
     is_active: bool
+    overrides: list[ShiftTypeWeekdayOverrideRead] = Field(default_factory=list)
 
 
 class ShiftTypeCreate(BaseModel):

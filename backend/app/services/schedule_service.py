@@ -13,6 +13,7 @@ from app.models.rule import Rule, RulePhase, RuleScope
 from app.models.schedule_period import PeriodState, SchedulePeriod
 from app.models.shift_slot import ShiftSlot
 from app.models.shift_type import ShiftType
+from app.models.shift_type_weekday_override import ShiftTypeWeekdayOverride
 from app.models.user import Role, User
 from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -27,8 +28,9 @@ from app.rules.schedule_validator import (
     evaluate_schedule_rules,
 )
 from app.rules.types import AssignedShift, ScheduleViolation, SlotStaffing, UserScheduleContext
-from app.rules.weekdays import is_weekend
+from app.rules.weekdays import Weekday, is_weekend
 from app.schemas.assignment import AssignmentCreate, BulkAssignmentOp
+from app.services.shift_effective import overrides_by_weekday_for, resolve_effective_config
 
 
 class AssignmentError(Exception):
@@ -61,6 +63,7 @@ def _rule_applies_to(rule: Rule, user: User) -> bool:
 class _PeriodData:
     slots: list[ShiftSlot]
     shift_types_by_id: dict[uuid.UUID, ShiftType]
+    overrides_by_type: dict[uuid.UUID, dict[Weekday, ShiftTypeWeekdayOverride]]
     assignments: list[Assignment]
     active_users: list[User]
     availability_rows: list[tuple[uuid.UUID, uuid.UUID, AvailabilityStatus]]
@@ -82,27 +85,42 @@ class ScheduleService:
     async def _load_period_data(self, period: SchedulePeriod) -> _PeriodData:
         slots = await self._slots.list_by_period(period.id)
         shift_types_by_id = {st.id: st for st in await self._shift_types.list_all()}
+        overrides = await self._shift_types.list_overrides_for_types(shift_types_by_id.keys())
+        overrides_rows_by_type: dict[uuid.UUID, list[ShiftTypeWeekdayOverride]] = defaultdict(list)
+        for override in overrides:
+            overrides_rows_by_type[override.shift_type_id].append(override)
+        overrides_by_type = {
+            type_id: overrides_by_weekday_for(rows)
+            for type_id, rows in overrides_rows_by_type.items()
+        }
         assignments = await self._assignments.list_by_period(period.id)
         active_users = [u for u in await self._users.list_all() if u.is_active]
         availability_rows = await self._availability.list_entries_for_slots([s.id for s in slots])
         return _PeriodData(
             slots=slots,
             shift_types_by_id=shift_types_by_id,
+            overrides_by_type=overrides_by_type,
             assignments=assignments,
             active_users=active_users,
             availability_rows=availability_rows,
         )
 
     def _to_assigned_shift(
-        self, slot: ShiftSlot, shift_types_by_id: dict[uuid.UUID, ShiftType]
+        self,
+        slot: ShiftSlot,
+        shift_types_by_id: dict[uuid.UUID, ShiftType],
+        overrides_by_type: dict[uuid.UUID, dict[Weekday, ShiftTypeWeekdayOverride]],
     ) -> AssignedShift:
         shift_type = shift_types_by_id[slot.shift_type_id]
+        effective = resolve_effective_config(
+            shift_type, overrides_by_type.get(shift_type.id, {}), slot.date
+        )
         return AssignedShift(
             shift_slot_id=slot.id,
             date=slot.date,
             shift_type_code=shift_type.code,
-            start_time=shift_type.start_time,
-            end_time=shift_type.end_time,
+            start_time=effective.start_time,
+            end_time=effective.end_time,
             is_weekend=is_weekend(slot.date),
         )
 
@@ -114,7 +132,7 @@ class ScheduleService:
             if slot is None:
                 continue
             by_user[assignment.user_id].append(
-                self._to_assigned_shift(slot, data.shift_types_by_id)
+                self._to_assigned_shift(slot, data.shift_types_by_id, data.overrides_by_type)
             )
         return by_user
 
@@ -198,7 +216,9 @@ class ScheduleService:
             return []
 
         data = await self._load_period_data(period)
-        candidate_slot_shift = self._to_assigned_shift(slot, data.shift_types_by_id)
+        candidate_slot_shift = self._to_assigned_shift(
+            slot, data.shift_types_by_id, data.overrides_by_type
+        )
         assigned_by_user = self._assigned_shifts_by_user(data)
         users_by_id = {u.id: u for u in data.active_users}
         schedule_rules = await self._rules.list_active_by_phase(RulePhase.SCHEDULE)

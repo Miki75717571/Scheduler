@@ -14,6 +14,8 @@
     "scores": "Scores",
     "criteria": "Criteria",
     "solverWeights": "Scheduling weights",
+    "rules": "Rules",
+    "invitations": "Invitations",
     "profile": "Profile"
   },
   "health": {
@@ -59,6 +61,7 @@
     "invitation.not_found": "This invitation link is invalid.",
     "invitation.expired": "This invitation has expired. Ask your manager for a new one.",
     "invitation.already_used": "This invitation has already been used.",
+    "invitation.revoked": "This invitation has been revoked.",
     "invitation.email_already_registered": "That email is already registered.",
     "user.not_found": "That user could not be found.",
     "validation.error": "Please check your input and try again.",
@@ -122,7 +125,8 @@
     "unused_contract_max_reached": "Already at their contract maximum of {{contract_max_shifts}} shifts.",
     "unused_rest_rule": "Would leave only {{actual}}h rest — needs at least {{required}}h.",
     "unused_max_consecutive_days": "Would exceed the maximum of {{allowed}} consecutive working days.",
-    "unused_not_prioritized": "Available, but another candidate was prioritised for this shift (a fairness/preference trade-off, not a rule violation)."
+    "unused_not_prioritized": "Available, but another candidate was prioritised for this shift (a fairness/preference trade-off, not a rule violation).",
+    "rest_conflict": "MIN_REST_HOURS = {{required_hours}}h makes {{from_weekday}} {{from_shift_type_code}} → {{to_weekday}} {{to_shift_type_code}} impossible ({{gap_hours}}h gap)."
   },
   "availability": {
     "title": "My availability",
@@ -301,6 +305,7 @@
     "statsShiftsPerEmployee": "Shifts per employee",
     "statsNoPreferences": "Nobody declared a preferred shift.",
     "diagnosticsTitle": "Why the schedule looks like this",
+    "diagnosticsRestConflictsTitle": "Rest-rule conflicts ({{count}})",
     "diagnosticsSlotsTitle": "Understaffed shifts ({{count}})",
     "diagnosticsEmployeesTitle": "Below contract minimum ({{count}})",
     "diagnosticsNoIssues": "No understaffed shifts, and everyone reached their contract minimum.",
@@ -424,5 +429,65 @@
         "help": "How much to favor someone whose preferred shifts were denied in previous months, so the same people aren't repeatedly passed over."
       }
     }
+  },
+  "adminRules": {
+    "title": "Scheduling rules",
+    "intro": "Availability and schedule rules that drive submission requirements and the automatic scheduler. Editing a rule's numbers here takes effect for the next period.",
+    "restConflictBannerTitle": "Rest-rule conflict",
+    "columnRule": "Rule",
+    "columnPhase": "Phase",
+    "columnSeverity": "Severity",
+    "columnParams": "Values",
+    "columnActions": "Actions",
+    "saved": "Saved.",
+    "phase": {
+      "AVAILABILITY": "Availability",
+      "SCHEDULE": "Schedule",
+      "BOTH": "Both"
+    },
+    "severity": {
+      "HARD": "Hard",
+      "SOFT": "Soft"
+    }
+  },
+  "invitations": {
+    "title": "Invitations",
+    "intro": "Invite people to join. While the email provider is set to \"console\", the accept link isn't emailed — copy it from here and send it yourself.",
+    "inviteTitle": "Invite someone",
+    "email": "Email",
+    "role": "Role",
+    "roleEmployee": "Employee",
+    "roleManager": "Manager",
+    "roleAdmin": "Admin",
+    "inviteButton": "Send invite",
+    "empty": "No invitations yet.",
+    "columnEmail": "Email",
+    "columnRole": "Role",
+    "columnStatus": "Status",
+    "columnExpires": "Expires",
+    "columnLink": "Accept link",
+    "columnActions": "Actions",
+    "copyLink": "Copy",
+    "copied": "Copied!",
+    "resendButton": "Resend",
+    "revokeButton": "Revoke",
+    "status": {
+      "PENDING": "Pending",
+      "ACCEPTED": "Accepted",
+      "EXPIRED": "Expired",
+      "REVOKED": "Revoked"
+    }
+  },
+  "feasibility": {
+    "title": "Can this month be filled?",
+    "overview": "{{totalSlots}} shifts this month, {{employees}} active employees — {{avg}} shifts each on average.",
+    "notYetKnown": "(not known yet)",
+    "minShiftsNoRule": "No minimum-shifts rule is configured.",
+    "minShifts": "{{employees}} employees × {{min}} minimum shifts = {{totalSlots}} shifts available this month.",
+    "availability": "{{declared}}/{{totalSlots}} shifts have someone declared available so far.",
+    "weekendNoRule": "No maximum-weekend-shifts rule is configured.",
+    "weekend": "{{weekendSlots}} weekend shifts, {{employees}} employees × max {{max}} each.",
+    "notSubmittedTitle": "Not yet submitted ({{count}})",
+    "notSubmittedEntry": "{{name}} — leaves roughly {{count}} shift(s) without their input"
   }
 }

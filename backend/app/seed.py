@@ -1,30 +1,21 @@
-"""Demo data bootstrap.
+"""Real configuration + (optional) demo data bootstrap.
 
-Phase 1: the first ADMIN user, from environment variables, if none exists yet.
-Phase 2 adds: the three demo ShiftTypes (MORNING/EVENING every day, MIDDAY
-weekends only), the two demo availability rules from CLAUDE.md ("minimum 7
-declared shifts", "at least 1 Friday evening"), ~18 employees with varied
-employment types, and a demo SchedulePeriod for next month with a full
-month of plausible availability already filled in (most employees
-submitted, a few left in DRAFT or NOT_STARTED so the manager's submission
-tracker has something to show).
+Two tiers, run every time `uv run python -m app.seed` is invoked:
 
-Idempotent: re-running `uv run python -m app.seed` skips anything that
-already exists (matched by code/email/year+month) rather than duplicating it
-or crashing.
+1. **Real config - always seeded, never gated.** The bootstrap ADMIN user,
+   the three real ShiftTypes (MORNING/MIDDAY/EVENING) with their per-weekday
+   overrides, the real availability/schedule Rule values, and the four
+   ScoreCriterion rows. This is the owner's actual cafeteria configuration,
+   not a demo - see the values' rationale inline below.
+2. **Demo data - only when `settings.seed_demo_data` is true.** ~18 fake
+   employees, a demo SchedulePeriod with plausible availability, a second
+   demo period advanced to GENERATED with deliberate violations, and demo
+   scores. `start.ps1` never sets this flag, so a fresh clone/real deploy
+   never gets fake employees; run `SEED_DEMO_DATA=1 uv run python -m
+   app.seed` explicitly to get a demo month to click through.
 
-Phase 3 adds: the six SCHEDULE-phase rules (ARCHITECTURE.md ss3.5's defaults)
-and a second demo period - the CURRENT month, advanced to GENERATED with a
-handful of manual assignments - deliberately containing one of each
-violation CLAUDE.md's Phase 3 brief calls out: an understaffed day (ERROR),
-a rest-period violation (ERROR), and one person below their (overridden)
-contract minimum (WARNING). See _seed_demo_schedule below.
-
-Phase 4 adds: the four default ScoreCriterion rows (ARCHITECTURE.md ss3.4)
-and one EmployeeScore per criterion for most employees, so the manager
-scoring grid isn't empty on first run. A few employees are deliberately left
-unscored on at least one criterion, so the grid's "not yet rated" state has
-something to show too.
+Idempotent throughout: re-running skips/updates rather than duplicating or
+crashing (matched by code/email/year+month, or upserted for overrides).
 """
 
 import asyncio
@@ -60,13 +51,13 @@ from app.schemas.assignment import AssignmentCreate
 from app.schemas.availability import AvailabilityEntryWrite
 from app.schemas.employee_score import EmployeeScoreCreate
 from app.schemas.period import PeriodCreate
-from app.schemas.rule import RuleCreate
+from app.schemas.rule import RuleCreate, RuleUpdate
 from app.schemas.score_criterion import (
     ScoreCriterionCreate,
     ScoreWeightsUpdate,
     ScoreWeightsUpdateItem,
 )
-from app.schemas.shift_type import ShiftTypeCreate
+from app.schemas.shift_type import ShiftTypeCreate, ShiftTypeUpdate, ShiftTypeWeekdayOverrideWrite
 from app.services.availability_service import AvailabilityService
 from app.services.period_service import PeriodService
 from app.services.rule_service import RuleService
@@ -74,56 +65,99 @@ from app.services.schedule_service import ScheduleService
 from app.services.score_service import ScoreService
 from app.services.shift_type_service import ShiftTypeService
 
+# The owner's real cafeteria: open 7 days/week, exactly one person per shift
+# (min=required=max=1 everywhere - see CLAUDE.md JOB 2/6). Each ShiftType's
+# own start_time/end_time/staff triple below is also its Mon-Thu (and, for
+# MORNING/EVENING, Sat-Sun) value; only Friday runs later, so that's the only
+# day that needs an explicit override row (see _SHIFT_TYPE_OVERRIDE_DEFS) -
+# every other active weekday falls back to these defaults untouched
+# (app/services/shift_effective.py's `resolve_effective_config`).
 _SHIFT_TYPE_DEFS = [
     ShiftTypeCreate(
         code="MORNING",
         name_pl="Rano",
         name_en="Morning",
-        start_time=time(7, 0),
-        end_time=time(15, 0),
+        start_time=time(8, 30),
+        end_time=time(14, 0),
         color_hex="#fbbf24",
         active_weekdays=ALL_WEEKDAYS_MASK,
-        default_required_staff=3,
-        default_min_staff=2,
-        default_max_staff=4,
+        default_required_staff=1,
+        default_min_staff=1,
+        default_max_staff=1,
         sort_order=0,
     ),
     ShiftTypeCreate(
         code="MIDDAY",
         name_pl="Poludnie",
         name_en="Midday",
-        start_time=time(11, 0),
-        end_time=time(19, 0),
+        # Weekend-only and deliberately overlapping MORNING/EVENING - two
+        # people on at once during the busiest part of a weekend day. Not a
+        # mistake; see CLAUDE.md JOB 2.
+        start_time=time(10, 0),
+        end_time=time(17, 0),
         color_hex="#22c55e",
         active_weekdays=WEEKEND_MASK,
-        default_required_staff=2,
+        default_required_staff=1,
         default_min_staff=1,
-        default_max_staff=3,
+        default_max_staff=1,
         sort_order=1,
     ),
     ShiftTypeCreate(
         code="EVENING",
         name_pl="Wieczor",
         name_en="Evening",
-        start_time=time(15, 0),
-        end_time=time(23, 0),
+        start_time=time(14, 0),
+        end_time=time(20, 0),
         color_hex="#6366f1",
         active_weekdays=ALL_WEEKDAYS_MASK,
-        default_required_staff=3,
-        default_min_staff=2,
-        default_max_staff=4,
+        default_required_staff=1,
+        default_min_staff=1,
+        default_max_staff=1,
         sort_order=2,
     ),
 ]
 
+# Only Friday differs from the ShiftType defaults above - MORNING/EVENING
+# both run later, closing at 22:00 instead of 20:00. This is also exactly the
+# pair that creates the MIN_REST_HOURS conflict called out in CLAUDE.md JOB 4
+# (Friday EVENING 22:00 -> Saturday MORNING 08:30 is a 10.5h gap, under the
+# 11h min_11h_rest rule below) - see app/rules/rest_conflicts.py.
+_SHIFT_TYPE_OVERRIDE_DEFS: list[tuple[str, Weekday, ShiftTypeWeekdayOverrideWrite]] = [
+    (
+        "MORNING",
+        Weekday.FRI,
+        ShiftTypeWeekdayOverrideWrite(
+            start_time=time(8, 30), end_time=time(15, 0), min_staff=1, required_staff=1, max_staff=1
+        ),
+    ),
+    (
+        "EVENING",
+        Weekday.FRI,
+        ShiftTypeWeekdayOverrideWrite(
+            start_time=time(15, 0), end_time=time(22, 0), min_staff=1, required_staff=1, max_staff=1
+        ),
+    ),
+]
+
+# 7 employees, ~70 slots/month => ~10 shifts/employee on average. Every
+# threshold below is sized for that, not for a larger crew - see the
+# min_15_availability comment for the one that's easy to get wrong.
 _RULE_DEFS = [
+    # 70 slots / 7 people = 10 shifts each needed. If MIN_AVAILABILITY_COUNT
+    # were left at the old default of 7 (one per person), the whole month
+    # would be mathematically unfillable: 7 employees x 7 declarations = 49
+    # declarations for 70 slots. 15 each gives 105 declarations for 70 slots,
+    # leaving the solver enough real choice to balance fairness/preferences
+    # instead of being forced into the one and only feasible assignment (or
+    # no feasible assignment at all). Do not lower this without re-deriving
+    # the math for the current employee count and slot count.
     RuleCreate(
-        code="min_7_shifts",
-        name_pl="Minimum 7 zadeklarowanych zmian",
-        name_en="Minimum 7 declared shifts",
+        code="min_15_availability",
+        name_pl="Minimum 15 zadeklarowanych zmian",
+        name_en="Minimum 15 declared shifts",
         type=RuleType.MIN_AVAILABILITY_COUNT,
         scope=RuleScope.GLOBAL,
-        params={"n": 7},
+        params={"n": 15},
         severity=RuleSeverity.HARD,
         phase=RulePhase.AVAILABILITY,
     ),
@@ -137,7 +171,7 @@ _RULE_DEFS = [
         severity=RuleSeverity.HARD,
         phase=RulePhase.AVAILABILITY,
     ),
-    # --- SCHEDULE-phase (ARCHITECTURE.md ss3.5 defaults) ---
+    # --- SCHEDULE-phase ---
     RuleCreate(
         code="one_shift_per_day",
         name_pl="Jedna zmiana dziennie",
@@ -148,6 +182,13 @@ _RULE_DEFS = [
         severity=RuleSeverity.HARD,
         phase=RulePhase.SCHEDULE,
     ),
+    # Kept at 11h (Polish labour law's daily rest minimum) even though it
+    # makes Friday EVENING -> Saturday MORNING impossible for the same
+    # person (10.5h gap) - a deliberate trade-off, surfaced rather than
+    # silently resolved. See CLAUDE.md JOB 4: editable in the admin rules
+    # screen, and the conflict is flagged both there and in solver
+    # diagnostics (app/rules/rest_conflicts.py) rather than being papered
+    # over by quietly loosening this number.
     RuleCreate(
         code="min_11h_rest",
         name_pl="Minimum 11 godzin odpoczynku",
@@ -169,32 +210,34 @@ _RULE_DEFS = [
         phase=RulePhase.SCHEDULE,
     ),
     RuleCreate(
-        code="min_5_shifts_per_month",
-        name_pl="Minimum 5 zmian w miesiacu",
-        name_en="Minimum 5 shifts per month",
+        code="min_8_shifts_per_month",
+        name_pl="Minimum 8 zmian w miesiacu",
+        name_en="Minimum 8 shifts per month",
         type=RuleType.MIN_SHIFTS_PER_MONTH,
         scope=RuleScope.GLOBAL,
-        params={"n": 5},
+        params={"n": 8},
         severity=RuleSeverity.SOFT,
         phase=RulePhase.SCHEDULE,
     ),
     RuleCreate(
-        code="max_18_shifts_per_month",
-        name_pl="Maksymalnie 18 zmian w miesiacu",
-        name_en="Maximum 18 shifts per month",
+        code="max_13_shifts_per_month",
+        name_pl="Maksymalnie 13 zmian w miesiacu",
+        name_en="Maximum 13 shifts per month",
         type=RuleType.MAX_SHIFTS_PER_MONTH,
         scope=RuleScope.GLOBAL,
-        params={"n": 18},
+        params={"n": 13},
         severity=RuleSeverity.SOFT,
         phase=RulePhase.SCHEDULE,
     ),
+    # ~26 weekend slots / 7 people = ~3.7 each; anything below 4 makes the
+    # month impossible, so this is set to 5 for real slack (CLAUDE.md JOB 3).
     RuleCreate(
-        code="max_3_weekend_shifts",
-        name_pl="Maksymalnie 3 zmiany weekendowe",
-        name_en="Maximum 3 weekend shifts",
+        code="max_5_weekend_shifts",
+        name_pl="Maksymalnie 5 zmian weekendowych",
+        name_en="Maximum 5 weekend shifts",
         type=RuleType.MAX_WEEKEND_SHIFTS,
         scope=RuleScope.GLOBAL,
-        params={"n": 3},
+        params={"n": 5},
         severity=RuleSeverity.SOFT,
         phase=RulePhase.SCHEDULE,
     ),
@@ -304,19 +347,59 @@ async def _seed_admin(db: AsyncSession) -> User:
     return admin
 
 
+def _shift_type_differs(existing: ShiftType, payload: ShiftTypeCreate) -> bool:
+    return (
+        existing.start_time != payload.start_time
+        or existing.end_time != payload.end_time
+        or existing.active_weekdays != payload.active_weekdays
+        or existing.default_required_staff != payload.default_required_staff
+        or existing.default_min_staff != payload.default_min_staff
+        or existing.default_max_staff != payload.default_max_staff
+    )
+
+
 async def _seed_shift_types(db: AsyncSession) -> list[ShiftType]:
+    """Unlike most of this module's seeders, an existing row is UPDATED to
+    match `_SHIFT_TYPE_DEFS`, not left alone - CLAUDE.md JOB 2 is explicitly
+    about replacing whatever demo times/staffing an already-seeded database
+    has with the owner's real ones, not just filling in what's missing.
+    """
     repo = ShiftTypeRepository(db)
     service = ShiftTypeService(db)
     shift_types = []
     for payload in _SHIFT_TYPE_DEFS:
         existing = await repo.get_by_code(payload.code)
-        if existing is not None:
-            shift_types.append(existing)
+        if existing is None:
+            shift_type = await service.create(payload)
+            shift_types.append(shift_type)
+            print(f"Created shift type: {shift_type.code}")
             continue
-        shift_type = await service.create(payload)
+        if _shift_type_differs(existing, payload):
+            shift_type = await service.update(
+                existing.id,
+                ShiftTypeUpdate(
+                    start_time=payload.start_time,
+                    end_time=payload.end_time,
+                    active_weekdays=payload.active_weekdays,
+                    default_required_staff=payload.default_required_staff,
+                    default_min_staff=payload.default_min_staff,
+                    default_max_staff=payload.default_max_staff,
+                ),
+            )
+            print(f"Updated shift type to real config: {shift_type.code}")
+        else:
+            shift_type = existing
         shift_types.append(shift_type)
-        print(f"Created shift type: {shift_type.code}")
     return shift_types
+
+
+async def _seed_shift_type_overrides(db: AsyncSession, shift_types: list[ShiftType]) -> None:
+    service = ShiftTypeService(db)
+    shift_types_by_code = {st.code: st for st in shift_types}
+    for code, weekday, payload in _SHIFT_TYPE_OVERRIDE_DEFS:
+        shift_type = shift_types_by_code[code]
+        await service.upsert_override(shift_type.id, weekday, payload)
+    print(f"Set {len(_SHIFT_TYPE_OVERRIDE_DEFS)} shift type weekday override(s).")
 
 
 async def _seed_rules(db: AsyncSession) -> None:
@@ -327,6 +410,32 @@ async def _seed_rules(db: AsyncSession) -> None:
             continue
         rule = await service.create(payload)
         print(f"Created rule: {rule.code}")
+    await _deactivate_legacy_rules(db)
+
+
+# Rule codes replaced by CLAUDE.md JOB 3's real values (`_RULE_DEFS` above) -
+# an already-seeded database (this project's own dev DB before this change)
+# would otherwise end up with BOTH the old and new rows active at once for
+# the same rule type, silently applying two conflicting thresholds. Never
+# deleted (CLAUDE.md: audit history survives), just deactivated like any
+# other superseded row in this codebase.
+_LEGACY_RULE_CODES = [
+    "min_7_shifts",
+    "min_5_shifts_per_month",
+    "max_18_shifts_per_month",
+    "max_3_weekend_shifts",
+]
+
+
+async def _deactivate_legacy_rules(db: AsyncSession) -> None:
+    repo = RuleRepository(db)
+    service = RuleService(db)
+    for code in _LEGACY_RULE_CODES:
+        rule = await repo.get_by_code(code)
+        if rule is None or not rule.is_active:
+            continue
+        await service.update(rule.id, RuleUpdate(is_active=False))
+        print(f"Deactivated superseded rule: {code}")
 
 
 async def _seed_score_criteria(db: AsyncSession) -> None:
@@ -526,8 +635,9 @@ async def _seed_demo_schedule(db: AsyncSession, employees: list[User], *, actor:
     """A second demo period - the CURRENT month, distinct from next month's
     COLLECTING one above - already advanced to GENERATED with a handful of
     manual assignments. Deliberately left mostly unassigned (a manager
-    mid-way through manual scheduling, not a finished month) except for
-    three targeted scenarios: see module docstring.
+    mid-way through manual scheduling, not a finished month), which itself
+    already demonstrates understaffing (ERROR) everywhere it's untouched -
+    see the two additional targeted scenarios below.
     """
     year, month = date.today().year, date.today().month
     period_service = PeriodService(db)
@@ -573,7 +683,7 @@ async def _seed_demo_schedule(db: AsyncSession, employees: list[User], *, actor:
         )
 
     # Scenario 1: below (overridden) contract minimum. Anna's personal
-    # contract_min_shifts (10) is stricter than the global min_5_shifts rule,
+    # contract_min_shifts (10) is stricter than the global min_8_shifts rule,
     # and her 6 assigned shifts clear that global default but not her own -
     # proving the per-user override actually takes effect.
     contract_employee = employees[0]
@@ -589,49 +699,59 @@ async def _seed_demo_schedule(db: AsyncSession, employees: list[User], *, actor:
         if slot is not None:
             await _assign(contract_employee, slot)
 
-    # Scenario 2: rest-period violation. Piotr works the first EVENING shift
-    # of the month then the very next MORNING shift - 8 hours of rest,
-    # short of the 11-hour min_11h_rest rule.
+    # Scenario 2: rest-period violation. Piotr works a Friday EVENING shift
+    # (ends 22:00, see the Friday override in _SHIFT_TYPE_OVERRIDE_DEFS) then
+    # the very next (Saturday) MORNING shift (starts 08:30) - 10.5 hours of
+    # rest, short of the 11-hour min_11h_rest rule. This is the same
+    # structural conflict CLAUDE.md JOB 4 asks to surface, not hide - picking
+    # Friday->Saturday specifically (rather than "the first EVENING shift of
+    # the month") is what makes this scenario deterministic: every other
+    # weekday's EVENING->next-MORNING gap is a legal 12.5 hours.
     rest_employee = employees[1]
     rest_day = next(
         d
         for d in _all_dates(year, month)
-        if (d, "EVENING") in slot_by_date_and_code
+        if weekday_of(d) == Weekday.FRI
+        and (d, "EVENING") in slot_by_date_and_code
         and (d + timedelta(days=1), "MORNING") in slot_by_date_and_code
     )
     await _assign(rest_employee, slot_by_date_and_code[(rest_day, "EVENING")])
     await _assign(rest_employee, slot_by_date_and_code[(rest_day + timedelta(days=1), "MORNING")])
 
-    # Scenario 3: understaffed day. EVENING's default min_staff is 2 - one
-    # person here is deliberately below that minimum (an ERROR, not just a
-    # WARNING, since it's below min_staff rather than merely below
-    # required_staff).
-    understaffed_employee = employees[2]
-    rest_dates = (rest_day, rest_day + timedelta(days=1))
-    understaffed_day = next(
-        d
-        for d in _all_dates(year, month)
-        if (d, "EVENING") in slot_by_date_and_code and d not in rest_dates
-    )
-    await _assign(understaffed_employee, slot_by_date_and_code[(understaffed_day, "EVENING")])
-
+    # No separate "understaffed" scenario: with one-person shifts
+    # (min_staff = required_staff = 1, CLAUDE.md JOB 6b), staffing is binary
+    # - every one of the many slots this demo period leaves untouched is
+    # already 0/1 assigned, i.e. already understaffed below minimum. The
+    # partial-fill "assigned but still below minimum" case this scenario
+    # used to demonstrate no longer exists at this staffing level.
     print(
         f"Seeded demo schedule for {year}-{month:02d}: "
         f"{contract_employee.full_name} has {_CONTRACT_MIN_ACTUAL}/{_CONTRACT_MIN_OVERRIDE} "
         "contract shifts, "
         f"{rest_employee.full_name} has a rest violation on "
-        f"{rest_day.isoformat()} -> {(rest_day + timedelta(days=1)).isoformat()}, "
-        f"{understaffed_employee.full_name}'s {understaffed_day.isoformat()} EVENING shift "
-        "is understaffed below minimum."
+        f"{rest_day.isoformat()} (Friday EVENING) -> "
+        f"{(rest_day + timedelta(days=1)).isoformat()} (Saturday MORNING), "
+        "and every other open shift this month is left unassigned (already "
+        "understaffed below minimum, since min_staff = 1)."
     )
 
 
 async def run() -> None:
     async with SessionLocal() as db:
+        # Real config - always seeded, every run, regardless of
+        # SEED_DEMO_DATA (CLAUDE.md JOB 7).
         admin = await _seed_admin(db)
-        await _seed_shift_types(db)
+        shift_types = await _seed_shift_types(db)
+        await _seed_shift_type_overrides(db, shift_types)
         await _seed_rules(db)
         await _seed_score_criteria(db)
+
+        if not settings.seed_demo_data:
+            print("SEED_DEMO_DATA is off; skipping fake employees/period/schedule/scores.")
+            return
+
+        # Demo data - explicit opt-in only, never on a fresh clone or a real
+        # deploy (see app/core/config.py's `seed_demo_data`).
         employees = await _seed_employees(db)
         await _seed_demo_period(db, employees, actor=admin)
         await _seed_demo_schedule(db, employees, actor=admin)

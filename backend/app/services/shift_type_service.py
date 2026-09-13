@@ -3,8 +3,16 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.shift_type import ShiftType
+from app.models.shift_type_weekday_override import ShiftTypeWeekdayOverride
 from app.repositories.shift_type_repository import ShiftTypeRepository
-from app.schemas.shift_type import ShiftTypeCreate, ShiftTypeUpdate
+from app.rules.weekdays import Weekday
+from app.schemas.shift_type import (
+    ShiftTypeCreate,
+    ShiftTypeRead,
+    ShiftTypeUpdate,
+    ShiftTypeWeekdayOverrideRead,
+    ShiftTypeWeekdayOverrideWrite,
+)
 
 
 class ShiftTypeError(Exception):
@@ -56,3 +64,55 @@ class ShiftTypeService:
         await self._db.commit()
         await self._db.refresh(shift_type)
         return shift_type
+
+    # --- per-weekday overrides ------------------------------------------
+
+    async def to_read(self, shift_type: ShiftType) -> ShiftTypeRead:
+        overrides = await self._repo.list_overrides(shift_type.id)
+        return ShiftTypeRead(
+            id=shift_type.id,
+            code=shift_type.code,
+            name_pl=shift_type.name_pl,
+            name_en=shift_type.name_en,
+            start_time=shift_type.start_time,
+            end_time=shift_type.end_time,
+            color_hex=shift_type.color_hex,
+            active_weekdays=shift_type.active_weekdays,
+            default_required_staff=shift_type.default_required_staff,
+            default_min_staff=shift_type.default_min_staff,
+            default_max_staff=shift_type.default_max_staff,
+            sort_order=shift_type.sort_order,
+            is_active=shift_type.is_active,
+            overrides=[ShiftTypeWeekdayOverrideRead.model_validate(o) for o in overrides],
+        )
+
+    async def list_all_read(self, *, active_only: bool = False) -> list[ShiftTypeRead]:
+        return [await self.to_read(st) for st in await self.list_all(active_only=active_only)]
+
+    async def upsert_override(
+        self, shift_type_id: uuid.UUID, weekday: Weekday, payload: ShiftTypeWeekdayOverrideWrite
+    ) -> ShiftTypeWeekdayOverrideRead:
+        shift_type = await self._repo.get_by_id(shift_type_id)
+        if shift_type is None:
+            raise ShiftTypeError("shift_type.not_found")
+
+        override = await self._repo.get_override(shift_type_id, weekday)
+        if override is None:
+            override = ShiftTypeWeekdayOverride(shift_type_id=shift_type_id, weekday=weekday)
+        override.start_time = payload.start_time
+        override.end_time = payload.end_time
+        override.min_staff = payload.min_staff
+        override.required_staff = payload.required_staff
+        override.max_staff = payload.max_staff
+
+        await self._repo.save_override(override)
+        await self._db.commit()
+        await self._db.refresh(override)
+        return ShiftTypeWeekdayOverrideRead.model_validate(override)
+
+    async def delete_override(self, shift_type_id: uuid.UUID, weekday: Weekday) -> None:
+        override = await self._repo.get_override(shift_type_id, weekday)
+        if override is None:
+            raise ShiftTypeError("shift_type.override_not_found")
+        await self._repo.delete_override(override)
+        await self._db.commit()

@@ -7,7 +7,13 @@ from app.core.deps import CurrentUser, require_role
 from app.db.session import get_db
 from app.models.schedule_period import PeriodState
 from app.models.user import Role
-from app.schemas.period import PeriodCreate, PeriodRead, PeriodStateUpdate
+from app.schemas.period import (
+    FeasibilitySummaryRead,
+    NotSubmittedEmployeeRead,
+    PeriodCreate,
+    PeriodRead,
+    PeriodStateUpdate,
+)
 from app.schemas.shift_slot import ShiftSlotRead, ShiftSlotUpdate
 from app.services.period_service import PeriodError, PeriodService
 from app.services.schedule_service import ScheduleService
@@ -104,7 +110,43 @@ async def list_slots(
         await service.get(period_id)
     except PeriodError as exc:
         raise _http_error(exc) from exc
-    return [ShiftSlotRead.model_validate(s) for s in await service.list_slots(period_id)]
+    return await service.list_slots_read(period_id)
+
+
+@router.get(
+    "/{period_id}/feasibility",
+    response_model=FeasibilitySummaryRead,
+    dependencies=[Depends(require_role(Role.MANAGER, Role.ADMIN))],
+)
+async def get_feasibility(
+    period_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> FeasibilitySummaryRead:
+    service = PeriodService(db)
+    try:
+        period = await service.get(period_id)
+    except PeriodError as exc:
+        raise _http_error(exc) from exc
+    summary = await service.feasibility_summary(period)
+    return FeasibilitySummaryRead(
+        total_slots=summary.total_slots,
+        active_employee_count=summary.active_employee_count,
+        avg_shifts_per_employee=summary.avg_shifts_per_employee,
+        min_shifts_per_month=summary.min_shifts_per_month,
+        max_weekend_shifts=summary.max_weekend_shifts,
+        weekend_slot_count=summary.weekend_slot_count,
+        total_declared=summary.total_declared,
+        min_shifts_feasible=summary.min_shifts_feasible,
+        availability_feasible=summary.availability_feasible,
+        weekend_feasible=summary.weekend_feasible,
+        not_submitted=[
+            NotSubmittedEmployeeRead(
+                user_id=e.user_id,
+                full_name=e.full_name,
+                estimated_slots_uncovered=e.estimated_slots_uncovered,
+            )
+            for e in summary.not_submitted
+        ],
+    )
 
 
 @router.patch(
@@ -124,4 +166,4 @@ async def update_slot(
         slot = await service.update_slot(period, slot_id, payload)
     except PeriodError as exc:
         raise _http_error(exc) from exc
-    return ShiftSlotRead.model_validate(slot)
+    return await service.to_slot_read(slot)

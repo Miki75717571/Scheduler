@@ -52,6 +52,16 @@ export function Layout({ children }: { children: ReactNode }) {
                 {t("nav.solverWeights")}
               </Link>
             )}
+            {isAdmin && (
+              <Link to="/admin/rules" className="hover:text-foreground">
+                {t("nav.rules")}
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/admin/invitations" className="hover:text-foreground">
+                {t("nav.invitations")}
+              </Link>
+            )}
             <Link to="/profile" className="hover:text-foreground">
               {t("nav.profile")}
             </Link>

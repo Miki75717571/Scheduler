@@ -35,6 +35,8 @@ const SLOT: ShiftSlot = {
   max_staff: 2,
   is_closed: false,
   note: null,
+  start_time: "07:00:00",
+  end_time: "15:00:00",
 };
 
 function detailWith(validation: AvailabilityDetail["validation"]): AvailabilityDetail {

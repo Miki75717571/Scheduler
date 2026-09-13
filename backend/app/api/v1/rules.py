@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import require_role
 from app.db.session import get_db
 from app.models.user import Role
-from app.schemas.rule import RuleCreate, RuleRead, RuleUpdate
+from app.schemas.rule import RestConflictRead, RuleCreate, RuleRead, RuleUpdate
 from app.services.rule_service import RuleError, RuleService
 
 router = APIRouter(
@@ -27,6 +27,22 @@ def _http_error(exc: RuleError) -> HTTPException:
 @router.get("", response_model=list[RuleRead])
 async def list_rules(db: AsyncSession = Depends(get_db)) -> list[RuleRead]:
     return [RuleRead.model_validate(r) for r in await RuleService(db).list_all()]
+
+
+@router.get("/rest-conflicts", response_model=list[RestConflictRead])
+async def rest_conflicts(db: AsyncSession = Depends(get_db)) -> list[RestConflictRead]:
+    conflicts = await RuleService(db).rest_conflicts()
+    return [
+        RestConflictRead(
+            from_shift_type_code=c.from_shift_type_code,
+            from_weekday=c.from_weekday.value,
+            to_shift_type_code=c.to_shift_type_code,
+            to_weekday=c.to_weekday.value,
+            gap_hours=c.gap_hours,
+            required_hours=c.required_hours,
+        )
+        for c in conflicts
+    ]
 
 
 @router.post("", response_model=RuleRead, status_code=status.HTTP_201_CREATED)

@@ -1,9 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.user import Role
+
+InvitationStatus = Literal["PENDING", "ACCEPTED", "EXPIRED", "REVOKED"]
 
 
 class InvitationCreate(BaseModel):
@@ -19,10 +22,14 @@ class InvitationRead(BaseModel):
     role: Role
     expires_at: datetime
     accepted_at: datetime | None
-    # Development only - set by the router, never populated in production (the
-    # token is hashed at rest specifically so it can't be recovered from the
-    # DB; it must not leak back out through the API either). See
-    # tests/api/test_invitations.py::test_accept_url_is_absent_in_production.
+    revoked_at: datetime | None
+    status: InvitationStatus
+    # Only populated when the configured email provider can't actually
+    # deliver the invite itself ("console") - see
+    # tests/api/test_invitations.py::test_accept_url_is_absent_when_using_resend.
+    # The token is hashed at rest specifically so it can't be recovered from
+    # the DB; it must not leak back out through the API when email delivery
+    # is real either.
     accept_url: str | None = None
 
 

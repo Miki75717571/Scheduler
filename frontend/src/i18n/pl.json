@@ -14,6 +14,8 @@
     "scores": "Oceny",
     "criteria": "Kryteria",
     "solverWeights": "Wagi grafikowania",
+    "rules": "Zasady",
+    "invitations": "Zaproszenia",
     "profile": "Profil"
   },
   "health": {
@@ -59,6 +61,7 @@
     "invitation.not_found": "Ten link z zaproszeniem jest nieprawidłowy.",
     "invitation.expired": "To zaproszenie wygasło. Poproś managera o nowe.",
     "invitation.already_used": "To zaproszenie zostało już wykorzystane.",
+    "invitation.revoked": "To zaproszenie zostało odwołane.",
     "invitation.email_already_registered": "Ten adres email jest już zarejestrowany.",
     "user.not_found": "Nie znaleziono tego użytkownika.",
     "validation.error": "Sprawdź wprowadzone dane i spróbuj ponownie.",
@@ -122,7 +125,8 @@
     "unused_contract_max_reached": "Osiągnięto już maksimum umowy: {{contract_max_shifts}} zmian.",
     "unused_rest_rule": "Zostałoby tylko {{actual}}h odpoczynku — wymagane co najmniej {{required}}h.",
     "unused_max_consecutive_days": "Przekroczyłoby to maksimum {{allowed}} kolejnych dni pracy.",
-    "unused_not_prioritized": "Dostępny/a, ale do tej zmiany wybrano inną osobę (kompromis sprawiedliwości/preferencji, nie naruszenie zasady)."
+    "unused_not_prioritized": "Dostępny/a, ale do tej zmiany wybrano inną osobę (kompromis sprawiedliwości/preferencji, nie naruszenie zasady).",
+    "rest_conflict": "MIN_REST_HOURS = {{required_hours}}h sprawia, że {{from_weekday}} {{from_shift_type_code}} → {{to_weekday}} {{to_shift_type_code}} jest niemożliwe (przerwa {{gap_hours}}h)."
   },
   "availability": {
     "title": "Moja dostępność",
@@ -301,6 +305,7 @@
     "statsShiftsPerEmployee": "Zmiany na pracownika",
     "statsNoPreferences": "Nikt nie zadeklarował preferowanej zmiany.",
     "diagnosticsTitle": "Dlaczego grafik tak wygląda",
+    "diagnosticsRestConflictsTitle": "Konflikty zasady odpoczynku ({{count}})",
     "diagnosticsSlotsTitle": "Zmiany z niepełną obsadą ({{count}})",
     "diagnosticsEmployeesTitle": "Poniżej minimum umowy ({{count}})",
     "diagnosticsNoIssues": "Brak niedoborów obsady, wszyscy osiągnęli swoje minimum umowy.",
@@ -424,5 +429,65 @@
         "help": "Jak bardzo faworyzować osobę, której preferowane zmiany były odrzucane w poprzednich miesiącach, aby te same osoby nie były wciąż pomijane."
       }
     }
+  },
+  "adminRules": {
+    "title": "Zasady grafikowania",
+    "intro": "Zasady dostępności i grafiku, które sterują wymaganiami zgłoszeń i automatycznym solverem. Zmiana liczb tutaj obowiązuje od następnego okresu.",
+    "restConflictBannerTitle": "Konflikt zasady odpoczynku",
+    "columnRule": "Zasada",
+    "columnPhase": "Faza",
+    "columnSeverity": "Waga",
+    "columnParams": "Wartości",
+    "columnActions": "Akcje",
+    "saved": "Zapisano.",
+    "phase": {
+      "AVAILABILITY": "Dostępność",
+      "SCHEDULE": "Grafik",
+      "BOTH": "Obie"
+    },
+    "severity": {
+      "HARD": "Twarda",
+      "SOFT": "Miękka"
+    }
+  },
+  "invitations": {
+    "title": "Zaproszenia",
+    "intro": "Zapraszaj osoby do dołączenia. Gdy dostawca email jest ustawiony na \"console\", link akceptacji nie jest wysyłany mailem — skopiuj go stąd i wyślij samodzielnie.",
+    "inviteTitle": "Zaproś kogoś",
+    "email": "Email",
+    "role": "Rola",
+    "roleEmployee": "Pracownik",
+    "roleManager": "Manager",
+    "roleAdmin": "Admin",
+    "inviteButton": "Wyślij zaproszenie",
+    "empty": "Brak zaproszeń.",
+    "columnEmail": "Email",
+    "columnRole": "Rola",
+    "columnStatus": "Status",
+    "columnExpires": "Wygasa",
+    "columnLink": "Link akceptacji",
+    "columnActions": "Akcje",
+    "copyLink": "Kopiuj",
+    "copied": "Skopiowano!",
+    "resendButton": "Wyślij ponownie",
+    "revokeButton": "Odwołaj",
+    "status": {
+      "PENDING": "Oczekujące",
+      "ACCEPTED": "Zaakceptowane",
+      "EXPIRED": "Wygasłe",
+      "REVOKED": "Odwołane"
+    }
+  },
+  "feasibility": {
+    "title": "Czy da się obsadzić ten miesiąc?",
+    "overview": "{{totalSlots}} zmian w tym miesiącu, {{employees}} aktywnych pracowników — średnio {{avg}} zmian na osobę.",
+    "notYetKnown": "(jeszcze nieznane)",
+    "minShiftsNoRule": "Nie skonfigurowano zasady minimalnej liczby zmian.",
+    "minShifts": "{{employees}} pracowników × {{min}} zmian minimum = {{totalSlots}} zmian dostępnych w tym miesiącu.",
+    "availability": "{{declared}}/{{totalSlots}} zmian ma zadeklarowaną dostępność.",
+    "weekendNoRule": "Nie skonfigurowano zasady maksymalnej liczby zmian weekendowych.",
+    "weekend": "{{weekendSlots}} zmian weekendowych, {{employees}} pracowników × maks. {{max}} każdy.",
+    "notSubmittedTitle": "Jeszcze niewysłane ({{count}})",
+    "notSubmittedEntry": "{{name}} — pozostawia bez pokrycia ok. {{count}} zmian(y)"
   }
 }

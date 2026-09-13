@@ -39,12 +39,24 @@ function slot(overrides: Partial<ShiftSlot>): ShiftSlot {
     max_staff: 2,
     is_closed: false,
     note: null,
+    start_time: "09:00:00",
+    end_time: "17:00:00",
     ...overrides,
   };
 }
 
-const MORNING = shiftType({ id: "morning", code: "MORNING", start_time: "07:00:00", sort_order: 0 });
-const EVENING = shiftType({ id: "evening", code: "EVENING", start_time: "15:00:00", sort_order: 1 });
+const MORNING = shiftType({
+  id: "morning",
+  code: "MORNING",
+  start_time: "07:00:00",
+  sort_order: 0,
+});
+const EVENING = shiftType({
+  id: "evening",
+  code: "EVENING",
+  start_time: "15:00:00",
+  sort_order: 1,
+});
 const shiftTypesById = { morning: MORNING, evening: EVENING };
 
 // 2027-03-01 is a Monday, 2027-03-06/07 are Sat/Sun.
@@ -110,7 +122,10 @@ describe("copyFromLastMonthPatch", () => {
       slot({ id: "prev-mon-morning", date: "2027-02-01", shift_type_id: "morning" }), // Monday
       slot({ id: "prev-mon-evening", date: "2027-02-01", shift_type_id: "evening" }),
     ];
-    const previousStatus = { "prev-mon-morning": "PREFERRED", "prev-mon-evening": "AVAILABLE" } as const;
+    const previousStatus = {
+      "prev-mon-morning": "PREFERRED",
+      "prev-mon-evening": "AVAILABLE",
+    } as const;
     const currentSlots = [
       slot({ id: "cur-mon-morning", date: MON, shift_type_id: "morning" }),
       slot({ id: "cur-mon-evening", date: MON, shift_type_id: "evening" }),

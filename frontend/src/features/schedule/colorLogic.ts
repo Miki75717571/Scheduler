@@ -41,11 +41,14 @@ export function violationsForSlot(
   return violations.filter((v) => violationTouchesSlot(v, slotId));
 }
 
-// Colour policy per ARCHITECTURE.md ss6: green = fully staffed and legal,
-// amber = below target but legal, red = below minimum staff or a rule
-// violation. A closed day/shift is neither - it opts out of staffing
-// entirely (mirrors schedule_validator.check_understaffing skipping closed
-// slots).
+// Colour policy (CLAUDE.md JOB 6b): with one-person shifts, staffing is
+// binary - a slot has its person or it doesn't - so there is no "below
+// target but legal" state left to colour amber. green = fully staffed with
+// no warnings, amber = a rule/staffing WARNING (assigned against declared
+// availability, near a limit - never just "under required_staff"), red =
+// an ERROR or nobody assigned at all. A closed day/shift is neither - it
+// opts out of staffing entirely (mirrors
+// schedule_validator.check_understaffing skipping closed slots).
 export function computeSlotStatus(
   slot: Pick<ShiftSlot, "is_closed" | "min_staff" | "required_staff">,
   assignedCount: number,
@@ -57,7 +60,7 @@ export function computeSlotStatus(
   if (hasError || assignedCount < slot.min_staff) return "red";
 
   const hasWarning = slotViolations.some((v) => v.severity === "WARNING");
-  if (hasWarning || assignedCount < slot.required_staff) return "amber";
+  if (hasWarning) return "amber";
 
   return "green";
 }

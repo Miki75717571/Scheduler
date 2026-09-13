@@ -1,7 +1,8 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.deps import CurrentUser, require_role
 from app.db.session import get_db
 from app.models.user import Role
@@ -16,6 +17,26 @@ from app.services.invitation_service import InvitationError, InvitationService
 
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 
+_NOT_FOUND_KEYS = {"invitation.not_found"}
+
+
+def _http_error(exc: InvitationError) -> HTTPException:
+    if exc.message_key in _NOT_FOUND_KEYS:
+        status_code = status.HTTP_404_NOT_FOUND
+    elif exc.message_key == "invitation.already_used":
+        status_code = status.HTTP_409_CONFLICT
+    else:
+        status_code = status.HTTP_400_BAD_REQUEST
+    return HTTPException(status_code, detail={"message_key": exc.message_key})
+
+
+@router.get(
+    "", response_model=list[InvitationRead], dependencies=[Depends(require_role(Role.ADMIN))]
+)
+async def list_invitations(db: AsyncSession = Depends(get_db)) -> list[InvitationRead]:
+    service = InvitationService(db)
+    return [service.to_read(i) for i in await service.list_all()]
+
 
 @router.post(
     "",
@@ -26,22 +47,48 @@ router = APIRouter(prefix="/invitations", tags=["invitations"])
 async def create_invitation(
     payload: InvitationCreate, current_user: CurrentUser, db: AsyncSession = Depends(get_db)
 ) -> InvitationRead:
+    service = InvitationService(db)
     try:
-        invitation, accept_url = await InvitationService(db).create_invitation(
+        invitation, accept_url = await service.create_invitation(
             email=payload.email, role=payload.role, created_by=current_user
         )
     except InvitationError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT, detail={"message_key": exc.message_key}
         ) from exc
+    return service.to_read(invitation, accept_url=accept_url)
 
-    result = InvitationRead.model_validate(invitation)
-    if settings.app_env == "development":
-        # Dev convenience so you can copy the link straight from /docs instead
-        # of digging through logs. Never in production: the token is hashed at
-        # rest specifically so it can't be recovered from the DB or the API.
-        result.accept_url = accept_url
-    return result
+
+@router.post(
+    "/{invitation_id}/resend",
+    response_model=InvitationRead,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def resend_invitation(
+    invitation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> InvitationRead:
+    service = InvitationService(db)
+    try:
+        invitation, accept_url = await service.resend(invitation_id)
+    except InvitationError as exc:
+        raise _http_error(exc) from exc
+    return service.to_read(invitation, accept_url=accept_url)
+
+
+@router.post(
+    "/{invitation_id}/revoke",
+    response_model=InvitationRead,
+    dependencies=[Depends(require_role(Role.ADMIN))],
+)
+async def revoke_invitation(
+    invitation_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> InvitationRead:
+    service = InvitationService(db)
+    try:
+        invitation = await service.revoke(invitation_id)
+    except InvitationError as exc:
+        raise _http_error(exc) from exc
+    return service.to_read(invitation)
 
 
 @router.get("/{token}", response_model=InvitationPreview)

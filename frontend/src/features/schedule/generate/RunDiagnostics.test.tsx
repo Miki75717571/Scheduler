@@ -59,6 +59,7 @@ const DIAGNOSTICS: ScheduleDiagnostics = {
       },
     },
   ],
+  rest_conflicts: [],
 };
 
 describe("RunDiagnostics", () => {
@@ -69,7 +70,7 @@ describe("RunDiagnostics", () => {
   it("shows the all-clear state when there are no issues", () => {
     render(
       <RunDiagnostics
-        diagnostics={{ slots: [], employees: [] }}
+        diagnostics={{ slots: [], employees: [], rest_conflicts: [] }}
         nameById={{}}
         shiftTypeNameByCode={{}}
       />,
@@ -111,6 +112,42 @@ describe("RunDiagnostics", () => {
         /Short Employee: 3\/5 shifts \(declared 4\) — 2 short of their contract minimum/,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("shows a rest-rule conflict banner separate from per-slot diagnostics", () => {
+    render(
+      <RunDiagnostics
+        diagnostics={{
+          slots: [],
+          employees: [],
+          rest_conflicts: [
+            {
+              from_shift_type_code: "EVENING",
+              from_weekday: "FRI",
+              to_shift_type_code: "MORNING",
+              to_weekday: "SAT",
+              gap_hours: 10.5,
+              required_hours: 11,
+              message_key: "solver.rest_conflict",
+              message_params: {
+                from_shift_type_code: "EVENING",
+                from_weekday: "FRI",
+                to_shift_type_code: "MORNING",
+                to_weekday: "SAT",
+                gap_hours: 10.5,
+                required_hours: 11,
+              },
+            },
+          ],
+        }}
+        nameById={{}}
+        shiftTypeNameByCode={{}}
+      />,
+    );
+
+    expect(screen.getByText(/Rest-rule conflicts \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/FRI EVENING/)).toBeInTheDocument();
+    expect(screen.getByText(/SAT MORNING/)).toBeInTheDocument();
   });
 
   it("jumps to the slot's date when clicked", async () => {

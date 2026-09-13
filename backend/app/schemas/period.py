@@ -34,3 +34,23 @@ class PeriodStateUpdate(BaseModel):
     # (see app/api/v1/periods.py); this explicitly acknowledges and overrides
     # that block, which gets recorded in AuditLog.
     override_violations: bool = False
+
+
+class NotSubmittedEmployeeRead(BaseModel):
+    user_id: uuid.UUID
+    full_name: str
+    estimated_slots_uncovered: int
+
+
+class FeasibilitySummaryRead(BaseModel):
+    total_slots: int
+    active_employee_count: int
+    avg_shifts_per_employee: float
+    min_shifts_per_month: int | None
+    max_weekend_shifts: int | None
+    weekend_slot_count: int
+    total_declared: int
+    min_shifts_feasible: bool
+    availability_feasible: bool | None
+    weekend_feasible: bool
+    not_submitted: list[NotSubmittedEmployeeRead]

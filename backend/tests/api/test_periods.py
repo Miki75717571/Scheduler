@@ -250,3 +250,64 @@ async def test_transitioning_to_collecting_creates_submissions_for_active_users(
     entries = tracker_response.json()
     emails_status = {e["full_name"]: e["status"] for e in entries}
     assert emails_status["Maya"] == "NOT_STARTED"
+
+
+async def test_employee_cannot_view_feasibility(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await create_shift_types(db_session)
+    await create_user(db_session, email="nina@example.com", role=Role.MANAGER)
+    manager_token = await login(client, "nina@example.com")
+    period_id = (
+        await client.post(
+            "/api/v1/periods", json={"year": 2027, "month": 10}, headers=auth_headers(manager_token)
+        )
+    ).json()["id"]
+
+    await create_user(db_session, email="omar@example.com", role=Role.EMPLOYEE, full_name="Omar")
+    employee_token = await login(client, "omar@example.com")
+
+    response = await client.get(
+        f"/api/v1/periods/{period_id}/feasibility", headers=auth_headers(employee_token)
+    )
+
+    assert response.status_code == 403
+
+
+async def test_feasibility_flags_impossible_min_shifts(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await create_shift_types(db_session)
+    await create_user(db_session, email="paula@example.com", role=Role.ADMIN)
+    token = await login(client, "paula@example.com")
+    headers = auth_headers(token)
+
+    # One employee, and a MIN_SHIFTS_PER_MONTH far above what a single month
+    # of slots could ever cover - deliberately infeasible.
+    await create_user(db_session, email="quinn@example.com", role=Role.EMPLOYEE, full_name="Quinn")
+    await client.post(
+        "/api/v1/rules",
+        json={
+            "code": "min_shifts_test",
+            "name_pl": "Minimum zmian",
+            "name_en": "Minimum shifts",
+            "type": "MIN_SHIFTS_PER_MONTH",
+            "params": {"n": 9999},
+            "phase": "SCHEDULE",
+        },
+        headers=headers,
+    )
+
+    period_id = (
+        await client.post("/api/v1/periods", json={"year": 2027, "month": 11}, headers=headers)
+    ).json()["id"]
+
+    response = await client.get(f"/api/v1/periods/{period_id}/feasibility", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["active_employee_count"] == 1
+    assert body["min_shifts_per_month"] == 9999
+    assert body["min_shifts_feasible"] is False
+    assert body["availability_feasible"] is None  # nobody has submitted yet
+    assert any(e["full_name"] == "Quinn" for e in body["not_submitted"])

@@ -57,6 +57,11 @@ export interface ShiftSlot {
   max_staff: number;
   is_closed: boolean;
   note: string | null;
+  // Effective for this specific date - may differ from the parent ShiftType's
+  // own start_time/end_time when a per-weekday override applies (e.g.
+  // Friday EVENING runs later than Mon-Thu EVENING under the same code).
+  start_time: string;
+  end_time: string;
 }
 
 export type AvailabilityStatus = "UNAVAILABLE" | "AVAILABLE" | "PREFERRED";
@@ -204,9 +209,21 @@ export interface EmployeeDiagnostic {
   message_params: Record<string, unknown>;
 }
 
+export interface RestConflictDiagnostic {
+  from_shift_type_code: string;
+  from_weekday: string;
+  to_shift_type_code: string;
+  to_weekday: string;
+  gap_hours: number;
+  required_hours: number;
+  message_key: string;
+  message_params: Record<string, unknown>;
+}
+
 export interface ScheduleDiagnostics {
   slots: SlotDiagnostic[];
   employees: EmployeeDiagnostic[];
+  rest_conflicts: RestConflictDiagnostic[];
 }
 
 export interface SolverStats {
@@ -264,6 +281,81 @@ export interface ScheduleRun {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+}
+
+export type RuleType =
+  | "MIN_AVAILABILITY_COUNT"
+  | "MIN_AVAILABILITY_IN_SET"
+  | "MIN_AVAILABILITY_WEEKEND"
+  | "ONE_SHIFT_PER_DAY"
+  | "MIN_REST_HOURS"
+  | "MAX_CONSECUTIVE_DAYS"
+  | "MIN_SHIFTS_PER_MONTH"
+  | "MAX_SHIFTS_PER_MONTH"
+  | "MAX_WEEKEND_SHIFTS";
+
+export type RuleScope = "GLOBAL" | "EMPLOYMENT_TYPE" | "USER";
+export type RuleSeverity = "HARD" | "SOFT";
+export type RulePhase = "AVAILABILITY" | "SCHEDULE" | "BOTH";
+
+export interface Rule {
+  id: string;
+  code: string;
+  name_pl: string;
+  name_en: string;
+  type: RuleType;
+  scope: RuleScope;
+  scope_ref: string | null;
+  params: Record<string, unknown>;
+  severity: RuleSeverity;
+  weight: number | null;
+  phase: RulePhase;
+  is_active: boolean;
+}
+
+export type InvitationStatus = "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: Role;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  status: InvitationStatus;
+  // Only present when the configured email provider can't deliver the
+  // invite itself (e.g. still on the console provider) - see
+  // backend/app/services/invitation_service.py's `_reveals_accept_url`.
+  accept_url: string | null;
+}
+
+export interface RestConflict {
+  from_shift_type_code: string;
+  from_weekday: string;
+  to_shift_type_code: string;
+  to_weekday: string;
+  gap_hours: number;
+  required_hours: number;
+}
+
+export interface FeasibilityNotSubmittedEmployee {
+  user_id: string;
+  full_name: string;
+  estimated_slots_uncovered: number;
+}
+
+export interface FeasibilitySummary {
+  total_slots: number;
+  active_employee_count: number;
+  avg_shifts_per_employee: number;
+  min_shifts_per_month: number | null;
+  max_weekend_shifts: number | null;
+  weekend_slot_count: number;
+  total_declared: number;
+  min_shifts_feasible: boolean;
+  availability_feasible: boolean | null;
+  weekend_feasible: boolean;
+  not_submitted: FeasibilityNotSubmittedEmployee[];
 }
 
 export interface ScoreHistoryEntry {

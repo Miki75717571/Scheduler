@@ -21,6 +21,7 @@ from app.models import (  # noqa: F401  registers tables on Base.metadata
     score_criterion,
     shift_slot,
     shift_type,
+    shift_type_weekday_override,
     solver_weight_config,
     user,
 )

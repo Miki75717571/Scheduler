@@ -13,6 +13,7 @@ task to report it.
 
 import asyncio
 import uuid
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -27,6 +28,7 @@ from app.models.schedule_period import PeriodState, SchedulePeriod
 from app.models.schedule_run import ScheduleRun, ScheduleRunStatus
 from app.models.shift_slot import ShiftSlot
 from app.models.shift_type import ShiftType
+from app.models.shift_type_weekday_override import ShiftTypeWeekdayOverride
 from app.models.user import Role, User
 from app.repositories.assignment_repository import AssignmentRepository
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -58,6 +60,7 @@ from app.scheduling import (
     weights_to_dict,
 )
 from app.services.score_service import ScoreService
+from app.services.shift_effective import overrides_by_weekday_for, resolve_effective_config
 
 _RUNNABLE_STATES = (PeriodState.LOCKED, PeriodState.GENERATED)
 
@@ -172,6 +175,7 @@ def _diagnostics_to_json(diagnostics: Diagnostics) -> dict[str, Any]:
     return {
         "slots": [_slot_diagnostic_to_json(d) for d in diagnostics.slot_diagnostics],
         "employees": [_employee_diagnostic_to_json(d) for d in diagnostics.employee_diagnostics],
+        "rest_conflicts": [asdict(d) for d in diagnostics.rest_conflicts],
     }
 
 
@@ -306,6 +310,14 @@ class SolverService:
         all_slots = await self._slots.list_by_period(period.id)
         open_slots = [s for s in all_slots if not s.is_closed]
         shift_types_by_id = {st.id: st for st in await self._shift_types.list_all()}
+        overrides = await self._shift_types.list_overrides_for_types(shift_types_by_id.keys())
+        overrides_rows_by_type: dict[uuid.UUID, list[ShiftTypeWeekdayOverride]] = defaultdict(list)
+        for override in overrides:
+            overrides_rows_by_type[override.shift_type_id].append(override)
+        overrides_by_type = {
+            type_id: overrides_by_weekday_for(rows)
+            for type_id, rows in overrides_rows_by_type.items()
+        }
         # Unlike schedule_service.py's validator (which checks *any* active
         # user's manual assignments, since a manager could in principle be
         # dragged onto a shift by hand), the solver only ever proposes
@@ -318,7 +330,12 @@ class SolverService:
         schedule_rules = await self._rules.list_active_by_phase(RulePhase.SCHEDULE)
 
         slot_inputs = tuple(
-            self._to_slot_input(slot, shift_types_by_id[slot.shift_type_id]) for slot in open_slots
+            self._to_slot_input(
+                slot,
+                shift_types_by_id[slot.shift_type_id],
+                overrides_by_type.get(slot.shift_type_id, {}),
+            )
+            for slot in open_slots
         )
 
         open_slot_ids = {s.id for s in open_slots}
@@ -366,13 +383,22 @@ class SolverService:
         )
 
     @staticmethod
-    def _to_slot_input(slot: ShiftSlot, shift_type: ShiftType) -> SlotInput:
+    def _to_slot_input(
+        slot: ShiftSlot,
+        shift_type: ShiftType,
+        overrides_by_weekday: dict[Any, ShiftTypeWeekdayOverride],
+    ) -> SlotInput:
+        # Staff numbers come from the ShiftSlot row itself (may have been
+        # hand-edited by a manager since generation) - only the clock times
+        # are resolved per-weekday here, feeding MIN_REST_HOURS/
+        # MAX_CONSECUTIVE_DAYS with the real gap for that specific date.
+        effective = resolve_effective_config(shift_type, overrides_by_weekday, slot.date)
         return SlotInput(
             id=str(slot.id),
             date=slot.date,
             shift_type_code=shift_type.code,
-            start_time=shift_type.start_time,
-            end_time=shift_type.end_time,
+            start_time=effective.start_time,
+            end_time=effective.end_time,
             required_staff=slot.required_staff,
             min_staff=slot.min_staff,
             max_staff=slot.max_staff,

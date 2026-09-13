@@ -23,7 +23,11 @@ export function RunDiagnostics({
 }: RunDiagnosticsProps) {
   const { t, i18n } = useTranslation();
 
-  if (diagnostics.slots.length === 0 && diagnostics.employees.length === 0) {
+  if (
+    diagnostics.slots.length === 0 &&
+    diagnostics.employees.length === 0 &&
+    diagnostics.rest_conflicts.length === 0
+  ) {
     return (
       <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
         {t("generate.diagnosticsNoIssues")}
@@ -34,6 +38,31 @@ export function RunDiagnostics({
   return (
     <div className="space-y-3 rounded-md border border-border p-3">
       <h3 className="text-sm font-semibold">{t("generate.diagnosticsTitle")}</h3>
+
+      {diagnostics.rest_conflicts.length > 0 && (
+        <div>
+          <h4 className="mb-1 text-xs font-semibold text-amber-700">
+            {t("generate.diagnosticsRestConflictsTitle", {
+              count: diagnostics.rest_conflicts.length,
+            })}
+          </h4>
+          <ul className="space-y-1">
+            {diagnostics.rest_conflicts.map((conflict) => (
+              <li
+                key={`${conflict.from_weekday}-${conflict.from_shift_type_code}-${conflict.to_weekday}-${conflict.to_shift_type_code}`}
+                className="rounded border border-amber-300 bg-amber-50 p-2 text-xs"
+              >
+                {translateDiagnostic(
+                  conflict.message_key,
+                  conflict.message_params,
+                  t,
+                  i18n.language,
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {diagnostics.slots.length > 0 && (
         <div>

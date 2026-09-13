@@ -31,8 +31,21 @@ describe("computeSlotStatus", () => {
     expect(computeSlotStatus(SLOT, 2, [violation({ severity: "ERROR" })])).toBe("red");
   });
 
-  it("is amber when at or above min_staff but below required_staff", () => {
-    expect(computeSlotStatus(SLOT, 1, [])).toBe("amber");
+  it("is green when at or above min_staff and below required_staff, if no violation was raised", () => {
+    // Understaffing below required_staff is only ever surfaced as an actual
+    // WARNING violation (schedule_validator.check_understaffing) - amber is
+    // never inferred purely from the staff counts (CLAUDE.md JOB 6b).
+    expect(computeSlotStatus(SLOT, 1, [])).toBe("green");
+  });
+
+  it("is red for a one-person shift with nobody assigned and no violations", () => {
+    const onePersonSlot = { is_closed: false, min_staff: 1, required_staff: 1 };
+    expect(computeSlotStatus(onePersonSlot, 0, [])).toBe("red");
+  });
+
+  it("is green for a one-person shift with its one person assigned", () => {
+    const onePersonSlot = { is_closed: false, min_staff: 1, required_staff: 1 };
+    expect(computeSlotStatus(onePersonSlot, 1, [])).toBe("green");
   });
 
   it("is amber when a WARNING violation touches the slot, even if fully staffed", () => {

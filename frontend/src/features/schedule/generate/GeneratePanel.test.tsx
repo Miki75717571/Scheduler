@@ -144,7 +144,7 @@ describe("GeneratePanel", () => {
           fairness_spread: 2,
           shifts_per_employee: { "u-1": 4 },
         },
-        diagnostics: { slots: [], employees: [] },
+        diagnostics: { slots: [], employees: [], rest_conflicts: [] },
       }),
     );
     renderPanel();

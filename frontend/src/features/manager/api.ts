@@ -1,6 +1,7 @@
 import { apiClient } from "../../api/client";
 import type {
   AvailabilitySubmission,
+  FeasibilitySummary,
   PeriodState,
   SchedulePeriod,
   ShiftSlot,
@@ -41,13 +42,19 @@ export function fetchSlots(periodId: string): Promise<ShiftSlot[]> {
 export function updateSlot(
   periodId: string,
   slotId: string,
-  payload: Partial<Pick<ShiftSlot, "required_staff" | "min_staff" | "max_staff" | "is_closed" | "note">>,
+  payload: Partial<
+    Pick<ShiftSlot, "required_staff" | "min_staff" | "max_staff" | "is_closed" | "note">
+  >,
 ): Promise<ShiftSlot> {
   return apiClient.patch<ShiftSlot>(`/periods/${periodId}/slots/${slotId}`, payload);
 }
 
 export function fetchTracker(periodId: string): Promise<SubmissionTrackerEntry[]> {
   return apiClient.get<SubmissionTrackerEntry[]>(`/periods/${periodId}/availability/tracker`);
+}
+
+export function fetchFeasibility(periodId: string): Promise<FeasibilitySummary> {
+  return apiClient.get<FeasibilitySummary>(`/periods/${periodId}/feasibility`);
 }
 
 export function reopenAvailability(

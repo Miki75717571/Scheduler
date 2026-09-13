@@ -2,7 +2,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Role
-from tests.api.scheduling_helpers import auth_headers, create_user, login
+from tests.api.scheduling_helpers import auth_headers, create_shift_types, create_user, login
 
 
 async def test_employee_cannot_list_rules(client: AsyncClient, db_session: AsyncSession) -> None:
@@ -126,3 +126,53 @@ async def test_admin_can_update_rule_params(client: AsyncClient, db_session: Asy
 
     assert response.status_code == 200
     assert response.json()["params"] == {"n": 2}
+
+
+async def test_employee_cannot_view_rest_conflicts(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await create_user(db_session, email="grace3@example.com", role=Role.EMPLOYEE)
+    token = await login(client, "grace3@example.com")
+
+    response = await client.get("/api/v1/rules/rest-conflicts", headers=auth_headers(token))
+
+    assert response.status_code == 403
+
+
+async def test_rest_conflicts_flags_impossible_adjacent_shifts(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    # scheduling_helpers' fixture EVENING (15:00-23:00) -> next-day MORNING
+    # (07:00-15:00) is an 8h gap, below an 11h minimum - every weekday
+    # transition should be flagged, in particular MON -> TUE.
+    await create_shift_types(db_session)
+    await create_user(db_session, email="henry3@example.com", role=Role.ADMIN)
+    token = await login(client, "henry3@example.com")
+    headers = auth_headers(token)
+
+    await client.post(
+        "/api/v1/rules",
+        json={
+            "code": "min_11h_rest",
+            "name_pl": "Minimum 11 godzin",
+            "name_en": "Minimum 11 hours rest",
+            "type": "MIN_REST_HOURS",
+            "params": {"h": 11},
+            "phase": "SCHEDULE",
+        },
+        headers=headers,
+    )
+
+    response = await client.get("/api/v1/rules/rest-conflicts", headers=headers)
+
+    assert response.status_code == 200
+    conflicts = response.json()
+    assert any(
+        c["from_shift_type_code"] == "EVENING"
+        and c["from_weekday"] == "MON"
+        and c["to_shift_type_code"] == "MORNING"
+        and c["to_weekday"] == "TUE"
+        and c["gap_hours"] == 8.0
+        and c["required_hours"] == 11
+        for c in conflicts
+    )

@@ -44,3 +44,12 @@ class RuleUpdate(BaseModel):
     severity: RuleSeverity | None = None
     weight: int | None = None
     is_active: bool | None = None
+
+
+class RestConflictRead(BaseModel):
+    from_shift_type_code: str
+    from_weekday: str
+    to_shift_type_code: str
+    to_weekday: str
+    gap_hours: float
+    required_hours: int

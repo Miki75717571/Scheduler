@@ -23,13 +23,16 @@ class SolverWeightConfig(Base):
 
     __tablename__ = "solver_weight_configs"
 
+    # Defaults mirror app/scheduling/domain.py's SolverWeights - see that
+    # dataclass's docstring for the CLAUDE.md JOB 6c rationale (tuned for a
+    # ~7-person crew with one-person shifts, not a larger team).
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     understaffing: Mapped[int] = mapped_column(Integer, nullable=False, default=10000)
-    contract_min_shortfall: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    contract_min_shortfall: Mapped[int] = mapped_column(Integer, nullable=False, default=2500)
     denied_preference: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
-    fairness_spread: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
-    unpopular_shift_spread: Mapped[int] = mapped_column(Integer, nullable=False, default=25)
-    score_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    fairness_spread: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    unpopular_shift_spread: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    score_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     preference_debt: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
     updated_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(

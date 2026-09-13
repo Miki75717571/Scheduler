@@ -13,10 +13,13 @@ from datetime import date as date_
 from datetime import datetime, timedelta
 from datetime import time as time_
 
+from app.rules.rest_conflicts import ShiftOccurrence, find_impossible_adjacent_pairs
+from app.rules.weekdays import weekday_of
 from app.scheduling.domain import (
     AssignmentOutput,
     Diagnostics,
     EmployeeDiagnostic,
+    RestConflictDiagnostic,
     SlotDiagnostic,
     SlotInput,
     SolverInput,
@@ -151,6 +154,53 @@ def _unused_available_for_slot(
     return tuple(unused)
 
 
+def build_rest_conflicts(input: SolverInput) -> tuple[RestConflictDiagnostic, ...]:
+    """Derives every distinct (shift_type, weekday) that actually occurs in
+    this input's slots, then flags any adjacent-day pair the strictest
+    employee's min_rest_hours makes impossible - "strictest" because a gap
+    that already fails the most permissive employee's requirement fails
+    everyone's, but the reverse isn't true, and this is meant to explain the
+    hardest-to-fill case, not the easiest.
+    """
+    if not input.employees:
+        return ()
+    min_rest_hours = max(e.min_rest_hours for e in input.employees)
+
+    seen: dict[tuple[str, str], ShiftOccurrence] = {}
+    for slot in input.slots:
+        weekday = weekday_of(slot.date)
+        key = (slot.shift_type_code, weekday.value)
+        if key not in seen:
+            seen[key] = ShiftOccurrence(
+                shift_type_code=slot.shift_type_code,
+                weekday=weekday,
+                start_time=slot.start_time,
+                end_time=slot.end_time,
+            )
+
+    conflicts = find_impossible_adjacent_pairs(list(seen.values()), min_rest_hours)
+    return tuple(
+        RestConflictDiagnostic(
+            from_shift_type_code=c.from_shift_type_code,
+            from_weekday=c.from_weekday.value,
+            to_shift_type_code=c.to_shift_type_code,
+            to_weekday=c.to_weekday.value,
+            gap_hours=c.gap_hours,
+            required_hours=c.required_hours,
+            message_key="solver.rest_conflict",
+            message_params={
+                "from_shift_type_code": c.from_shift_type_code,
+                "from_weekday": c.from_weekday.value,
+                "to_shift_type_code": c.to_shift_type_code,
+                "to_weekday": c.to_weekday.value,
+                "gap_hours": c.gap_hours,
+                "required_hours": c.required_hours,
+            },
+        )
+        for c in conflicts
+    )
+
+
 def build_diagnostics(input: SolverInput, assignments: tuple[AssignmentOutput, ...]) -> Diagnostics:
     assigned_by_slot = _assigned_by_slot(assignments)
     assigned_by_employee = _assigned_by_employee(assignments)
@@ -213,7 +263,9 @@ def build_diagnostics(input: SolverInput, assignments: tuple[AssignmentOutput, .
         )
 
     return Diagnostics(
-        slot_diagnostics=tuple(slot_diagnostics), employee_diagnostics=tuple(employee_diagnostics)
+        slot_diagnostics=tuple(slot_diagnostics),
+        employee_diagnostics=tuple(employee_diagnostics),
+        rest_conflicts=build_rest_conflicts(input),
     )
 
 

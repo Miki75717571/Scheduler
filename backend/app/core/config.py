@@ -173,6 +173,10 @@ class Settings(BaseSettings):
     # App
     app_env: str = "development"
     frontend_base_url: str = "http://localhost:5173"
+    # Off by default everywhere, including a fresh dev clone (start.ps1 never
+    # sets it) - fake employees/periods/scores are opt-in only, via
+    # `SEED_DEMO_DATA=1 uv run python -m app.seed`. See app/seed.py.
+    seed_demo_data: bool = False
 
     _missing_in_production: list[str] = PrivateAttr(default_factory=list)
 

@@ -40,6 +40,24 @@ uv run python -m app.seed      # prints the admin email/password
 uv run uvicorn app.main:app --reload
 ```
 
+`app.seed` always seeds real, ongoing configuration (the bootstrap admin,
+shift types + their per-weekday overrides, rules, score criteria) — never
+fake employees, periods, or scores, so a fresh clone or a real deploy never
+gets demo data by accident. To get a demo month to click through (as the
+walkthroughs below assume), opt in explicitly:
+
+```bash
+SEED_DEMO_DATA=1 uv run python -m app.seed
+```
+
+To wipe everything *except* the admin account(s) and that real
+configuration — e.g. before switching a dev database over to real people —
+run the deliberately separate, confirmation-gated reset script:
+
+```bash
+uv run python -m app.reset_data --yes
+```
+
 **Frontend** (from `frontend/`):
 ```bash
 cd frontend
@@ -153,9 +171,11 @@ built on top of this API.
 2. `GET /api/v1/periods` — find the period in state `GENERATED` for the current month (the
    `COLLECTING` one is next month's availability-collection demo from Phase 2). Copy its `id`.
 3. `GET /api/v1/periods/{period_id}/violations` — the seeded month deliberately contains:
-   - an `ERROR` with `rule_code: min_11h_rest` (an employee closes one evening then opens the
-     next morning — 8 hours of rest against an 11-hour rule),
-   - a `WARNING` with `rule_code: min_5_shifts_per_month` and `"required": 10` (one employee has
+   - an `ERROR` with `rule_code: min_11h_rest` (an employee closes a Friday `EVENING` shift then
+     opens Saturday `MORNING` — 10.5 hours of rest against an 11-hour rule; see the "rest-rule
+     conflict" section below for why this specific pair is a known, surfaced trade-off rather than
+     a bug),
+   - a `WARNING` with `rule_code: min_8_shifts_per_month` and `"required": 10` (one employee has
      a personal `contract_min_shifts` override stricter than the global default — their 6 shifts
      clear the global rule but not their own contract),
    - several `ERROR`s with `message_key: schedule.understaffed_below_minimum` (most of the month
@@ -193,7 +213,7 @@ The manager schedule calendar and the employee schedule view, on top of the API 
 the response — see `app/repositories/user_repository.py`'s `list_by_ids`), which is what lets the
 employee view name colleagues on a shared shift without a roster-wide endpoint.
 
-1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `SEED_DEMO_DATA=1 uv run python -m app.seed`
    from `backend/` if you haven't already — it seeds a `GENERATED` period for the current month
    with the three violation scenarios described above.
 2. Log in as the manager/admin the terminal printed, go to **Manager** → the `GENERATED` period →
@@ -234,7 +254,7 @@ reliability, speed, seniority — weights `0.35/0.35/0.15/0.15`, all editable/re
 admin) and some demo scores; a few employees are deliberately left unscored on one criterion so
 the grid's "not yet rated" state has something to show.
 
-1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `SEED_DEMO_DATA=1 uv run python -m app.seed`
    from `backend/` if you haven't already.
 2. Log in as the bootstrap admin and open **Criteria** (`/admin/criteria`, admin-only nav link) —
    the four seeded criteria, each with its own rename/description save button, a weight input, and
@@ -275,7 +295,7 @@ The CP-SAT solver itself (`backend/app/scheduling/` — pure, no DB access, guar
 directly through `/docs` (Swagger UI). See the next section for the **Generate** screen built on
 top of this API.
 
-1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `SEED_DEMO_DATA=1 uv run python -m app.seed`
    from `backend/` if you haven't already.
 2. Open http://localhost:8000/docs and **Authorize** as the admin the terminal printed.
 3. `GET /api/v1/periods` — find the `COLLECTING` period (next month's availability demo from
@@ -325,7 +345,7 @@ before/after confirmation so regenerating never silently discards manual work, a
 translated diagnostics, run history with before/after comparison, and an admin screen for tuning
 the solver's objective weights in plain language.
 
-1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `uv run python -m app.seed`
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`, then run `SEED_DEMO_DATA=1 uv run python -m app.seed`
    from `backend/` if you haven't already — it seeds a `COLLECTING` period for **next month** with
    a full month of plausible availability already filled in for most employees (see
    `app/seed.py`'s `_seed_demo_period`).
@@ -382,3 +402,61 @@ the translated diagnostics panel. Backend: `backend/tests/api/test_schedule_runs
 revert endpoint end-to-end, and `backend/tests/scheduling/test_cpsat_golden.py` covers the
 `unused_available` reasoning (already-assigned-same-day, contract-max-reached, and the
 not-prioritized fallback when no hard rule excludes a candidate) as pure solver-output invariants.
+
+## Real configuration — what to click through
+
+Switches the app from demo data to the owner's actual cafeteria: per-weekday shift times under one
+stable code (`ShiftTypeWeekdayOverride` — see `app/services/shift_effective.py`), one-person shifts,
+rule values sized for 7 employees, a surfaced (not hidden) rest-rule trade-off, a pre-generate
+feasibility check, and a real invitation flow. `app.seed`'s real-config tier (shift types +
+overrides, rules, score criteria) always reflects this now — see the "Quick start" section above
+for the `SEED_DEMO_DATA` flag this introduced.
+
+1. `powershell -ExecutionPolicy Bypass -File .\start.ps1`. `GET /api/v1/shift-types` — `MORNING`
+   and `EVENING` are active every day, `MIDDAY` only `active_weekdays` Sat+Sun (`96`); each carries
+   `overrides: [...]` with a `FRI` row (`MORNING` 08:30–15:00, `EVENING` 15:00–22:00) — every other
+   weekday falls back to the type's own default (Mon–Thu/Sat/Sun times).
+2. `POST /api/v1/periods` for next month, then `GET /api/v1/periods/{id}/slots` — every slot's
+   `start_time`/`end_time` are the EFFECTIVE values for that specific date (resolved server-side,
+   never the flat `ShiftType` time): a Monday `EVENING` slot reads 14:00–20:00, a Friday `EVENING`
+   slot reads 15:00–22:00, and every slot has `min_staff = required_staff = max_staff = 1`.
+3. `GET /api/v1/rules` — `min_15_availability` (not the old `min_7`), `min_8_shifts_per_month`,
+   `max_13_shifts_per_month`, `max_5_weekend_shifts`, `min_11h_rest` still `11`. Admin-only
+   **Rules** nav link (`/admin/rules`) lists all of these with inline params editing.
+4. `GET /api/v1/rules/rest-conflicts` (or the amber banner at the top of `/admin/rules`) —
+   `{"from_shift_type_code": "EVENING", "from_weekday": "FRI", "to_shift_type_code": "MORNING",
+   "to_weekday": "SAT", "gap_hours": 10.5, "required_hours": 11}`. This is `min_11h_rest` making
+   Friday-evening-into-Saturday-morning structurally impossible for the same person — surfaced, not
+   silently loosened; edit `min_11h_rest`'s `h` param right there if you ever want to change the
+   trade-off. The same conflict appears in a generated run's diagnostics
+   (`GET /api/v1/schedule-runs/{id}` → `diagnostics.rest_conflicts`, and the **Rest-rule conflicts**
+   banner in the Generate panel's "Why the schedule looks like this" section) so an
+   otherwise-mysterious hard-to-fill Saturday morning has an immediate, visible cause.
+5. On a period's detail page (`/manager/periods/{id}`), the **Can this month be filled?** panel
+   above the state controls (`GET /api/v1/periods/{id}/feasibility`) — total slots, active
+   employees and the average shifts each must work, whether `employees × MIN_SHIFTS_PER_MONTH`
+   exceeds total slots, whether declared availability covers total slots (once any submission
+   exists), whether weekend slots exceed `employees × MAX_WEEKEND_SHIFTS`, and who hasn't submitted
+   yet with an estimate of the slots that leaves uncovered.
+6. On the schedule calendar, a slot is either green (its one person assigned, no warnings) or red
+   (nobody assigned, or an `ERROR`) — amber is reserved for an actual rule/staffing `WARNING`, never
+   inferred just from "below target but legal" (`frontend/src/features/schedule/colorLogic.ts`).
+7. `GET /api/v1/solver/weights` — rebalanced for a small crew (`contract_min_shortfall` 2500,
+   `fairness_spread` 60, `unpopular_shift_spread` 50, `score_weight` 5) — see
+   `app/scheduling/domain.py`'s `SolverWeights` docstring for the reasoning behind each number.
+8. As an admin, open **Invitations** (`/admin/invitations`) — invite by email/role; while
+   `EMAIL_PROVIDER=console` (the default), the accept link appears right there to copy and send
+   yourself, with expiry, **Resend** (issues a fresh link, old one stops working), and **Revoke**.
+   `GET /api/v1/invitations` returns `403` for a non-admin token.
+9. Once you're done testing, wipe every non-admin user and all availability/assignments/periods/
+   scores/runs (keeping shift types, rules, criteria, and solver weights) with:
+   ```bash
+   uv run python -m app.reset_data --yes
+   ```
+
+Backend tests: `backend/tests/unit/test_rest_conflicts.py` (the detector, pure), `backend/tests/api/
+test_shift_type_overrides.py` (override CRUD + effective-time resolution end-to-end),
+`test_periods.py`'s feasibility tests, `test_rules.py`'s rest-conflict endpoint tests, `test_invitations.py`'s
+list/resend/revoke tests, and `tests/unit/test_reset_data.py`. Frontend:
+`frontend/src/features/schedule/colorLogic.test.ts` (binary staffing colours) and
+`RunDiagnostics.test.tsx` (the rest-conflict banner).

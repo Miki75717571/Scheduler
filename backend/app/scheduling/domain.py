@@ -64,18 +64,34 @@ class LockedAssignmentInput:
 
 @dataclass(frozen=True)
 class SolverWeights:
-    """ARCHITECTURE.md ss4.1's objective coefficients. Defaults match the
-    doc exactly; the live values normally come from the `solver_weight_configs`
-    DB row (app/models/solver_weight_config.py) so they're tunable without a
+    """ARCHITECTURE.md ss4.1's objective coefficients. The live values
+    normally come from the `solver_weight_configs` DB row
+    (app/models/solver_weight_config.py) so they're tunable without a
     deploy, but this dataclass itself has no idea where they came from.
+
+    Defaults tuned for a small (~7-person) crew with one-person shifts
+    (CLAUDE.md JOB 6c), not ARCHITECTURE.md's original larger-team numbers:
+    - contract_min_shortfall raised 1000 -> 2500: with 7 people, one person
+      short of their monthly floor is a much bigger fraction of total
+      capacity than at 20+ people.
+    - fairness_spread raised 30 -> 60 and unpopular_shift_spread 25 -> 50:
+      MIN/MAX_SHIFTS_PER_MONTH already bounds the range, but with only one
+      slot per shift instead of 2-3, whoever "loses" a Friday evening or
+      weekend slot loses all of it - spreading unpopular shifts evenly
+      matters more at this scale, not less.
+    - score_weight halved 10 -> 5: one person per shift plus everyone
+      needing ~10 shifts/month leaves little room for score to pick winners
+      on contested desirable shifts without starving someone's floor.
+    - understaffing, denied_preference, preference_debt unchanged - no
+      scale-dependent reason to move them.
     """
 
     understaffing: int = 10000
-    contract_min_shortfall: int = 1000
+    contract_min_shortfall: int = 2500
     denied_preference: int = 20
-    fairness_spread: int = 30
-    unpopular_shift_spread: int = 25
-    score_weight: int = 10
+    fairness_spread: int = 60
+    unpopular_shift_spread: int = 50
+    score_weight: int = 5
     preference_debt: int = 15
 
 
@@ -163,9 +179,30 @@ class EmployeeDiagnostic:
 
 
 @dataclass(frozen=True)
+class RestConflictDiagnostic:
+    """A (shift_type, weekday) -> (shift_type, next weekday) pair that the
+    current MIN_REST_HOURS value makes structurally impossible for the same
+    person to work - e.g. Friday EVENING -> Saturday MORNING. Surfaced here
+    so "Saturday mornings are hard to fill" has an immediate, visible cause
+    instead of requiring the manager to work it out by hand (CLAUDE.md
+    JOB 4). See app/rules/rest_conflicts.py for the detector.
+    """
+
+    from_shift_type_code: str
+    from_weekday: str
+    to_shift_type_code: str
+    to_weekday: str
+    gap_hours: float
+    required_hours: int
+    message_key: str
+    message_params: dict[str, object]
+
+
+@dataclass(frozen=True)
 class Diagnostics:
     slot_diagnostics: tuple[SlotDiagnostic, ...]
     employee_diagnostics: tuple[EmployeeDiagnostic, ...]
+    rest_conflicts: tuple[RestConflictDiagnostic, ...] = ()
 
 
 @dataclass(frozen=True)
